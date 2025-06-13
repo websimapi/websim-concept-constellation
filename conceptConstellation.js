@@ -87,9 +87,9 @@ function initializeGraph(container) {
         // Increase distance for more spacing between linked nodes
         .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(150)) // Increased distance from 100 to 150
         .force("charge", d3.forceManyBody().strength(-300)) // Node repulsion
-        .force("center", d3.forceCenter(centerX, centerY)); // Center force
-    // Add collision force to prevent node overlap
-    .force("collide", d3.forceCollide().radius(calculateNodeRadius).iterations(2)); // Use dynamic radius function
+        .force("center", d3.forceCenter(centerX, centerY)) // Center force
+        // Add collision force to prevent node overlap
+        .force("collide", d3.forceCollide().radius(calculateNodeRadius).iterations(2)); // Use dynamic radius function
 
     // Create link and node elements
     linkElements = svg.append("g").selectAll(".relation-line");
