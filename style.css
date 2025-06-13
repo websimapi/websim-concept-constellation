@@ -124,4 +124,26 @@ svg text {
     font-family: sans-serif;
 }
 
+.info-section {
+    text-align: left;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
 
+.info-section h2 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.info-section ul {
+    list-style: disc;
+    margin-left: 20px;
+    margin-bottom: 20px;
+    padding: 0;
+}
+
+.info-section li {
+    margin-bottom: 8px;
+    color: #666;
+}

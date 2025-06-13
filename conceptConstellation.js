@@ -109,6 +109,7 @@ function createNode(x, y, text, className) {
 // Main function to handle exploration
 function exploreWord(word, container) {
     if (!word || word.trim() === "") {
+        // Display placeholder if input is empty
         container.innerHTML = '<p class="placeholder">Please enter a word.</p>';
         return;
     }
@@ -136,5 +137,7 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
             exploreButton.click();
         }
     });
-}
 
+    // Initial state: display placeholder
+    visualizationArea.innerHTML = '<p class="placeholder">Enter a word above and click \'Explore\' to see the concept constellation.</p>';
+}

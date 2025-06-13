@@ -7,4 +7,3 @@ const visualizationArea = document.getElementById('visualizationArea');
 
 // Initialize the constellation setup
 setupConceptConstellation(wordInput, exploreButton, visualizationArea);
-
