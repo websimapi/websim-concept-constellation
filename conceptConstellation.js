@@ -78,7 +78,8 @@ function initializeGraph(container) {
 
     // Initialize force simulation
     simulation = d3.forceSimulation(graphData.nodes)
-        .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100)) // Link force based on node IDs
+        // Increase distance for more spacing between linked nodes
+        .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(150)) // Increased distance from 100 to 150
         .force("charge", d3.forceManyBody().strength(-300)) // Node repulsion
         .force("center", d3.forceCenter(centerX, centerY)); // Center force
 
@@ -157,6 +158,7 @@ function updateGraph() {
                  const group = enter.append("g")
                      .attr("class", d => d.isCenter ? "center-node node" : "concept-node node")
                      // Initial position for animation (optional: could be parent position)
+                     // Force layout will position them afterwards
                      .attr("transform", d => `translate(${d.x || centerX},${d.y || centerY})`)
                      .style("opacity", 0); // Start transparent for fade-in
 
@@ -211,67 +213,6 @@ function updateGraph() {
     simulation.alpha(1).restart(); // Set alpha to 1 to restart simulation with full energy
 }
 
-// Function to calculate/update node positions based on parent-child relationships
-function updateNodePositions(nodes) {
-    const centerX = 400;
-    const centerY = 250;
-    const level1Radius = 200; // Radius for first layer around center
-    const childRadius = 100; // Radius for children around their specific parent
-
-    // Ensure center node is positioned
-    const centerNode = nodes.find(node => node.isCenter);
-    if (centerNode) {
-        centerNode.x = centerX;
-        centerNode.y = centerY;
-    }
-
-    // Group nodes by their parentId
-    const nodesByParent = {};
-    nodes.forEach(node => {
-        if (node.parentId) {
-            if (!nodesByParent[node.parentId]) {
-                nodesByParent[node.parentId] = [];
-            }
-            nodesByParent[node.parentId].push(node);
-        }
-    });
-
-    // Position nodes based on their parent
-    for (const parentId in nodesByParent) {
-        const children = nodesByParent[parentId];
-        const parentNode = nodes.find(node => node.id === parentId);
-
-        if (!parentNode || parentNode.x === undefined || parentNode.y === undefined) {
-            console.warn(`Parent node ${parentId} not found or not positioned.`);
-            continue;
-        }
-
-        const px = parentNode.x;
-        const py = parentNode.y;
-
-        // Determine radius for this group of children
-        // If parent is the initial center, use level1Radius, otherwise use childRadius
-        const currentRadius = parentNode.isCenter ? level1Radius : childRadius;
-
-        children.forEach((child, index) => {
-             // Only position if the node hasn't been positioned yet by another parent
-             // This prioritizes the position based on the first parent that added it.
-             if (child.x === undefined || child.y === undefined) {
-                // Calculate angle to position child radially around parent
-                // Distribute children evenly in a circle
-                const angle = (Math.PI * 2 / children.length) * index;
-
-                child.x = px + currentRadius * Math.cos(angle);
-                child.y = py + currentRadius * Math.sin(angle);
-             }
-        });
-    }
-
-    // Optional: Could add logic here to slightly adjust positions to reduce overlap
-    // This would require more complex layout algorithms (e.g., force simulation steps)
-    // For now, positions are fixed once set by the parent.
-}
-
 // Main function to handle exploration or node click
 async function handleExplore(word, container, clickedNodeId = null) {
     if (!word || word.trim() === "") {
@@ -301,13 +242,15 @@ async function handleExplore(word, container, clickedNodeId = null) {
         graphData.nodes = [];
         graphData.links = [];
         // Add the initial node. D3 simulation will position it.
-        graphData.nodes.push({ id: word, text: word, isCenter: true, fx: centerX, fy: centerY }); // Fix center node position
+        // Fix center node position
+        graphData.nodes.push({ id: word, text: word, isCenter: true, fx: centerX, fy: centerY });
          // Initialize SVG and simulation on the first explore
         initializeGraph(container);
     }
     // Note: If clickedNodeId IS provided, we do NOT clear graphData. We add to it.
 
     // Find the node for the word being explored to set its fixed position temporarily
+    // This helps new nodes spawn relative to it initially
     const exploringNode = graphData.nodes.find(n => n.id === word);
      if (exploringNode) {
          // Temporarily fix the position of the node being explored
@@ -324,7 +267,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
     loadingOverlay.remove();
 
      // Unfix the exploring node after getting results
-    if (exploringNode && !exploringNode.isCenter) { // Don't unfix the *initial* center node
+    if (exploringNode && !exploringNode.isCenter) { // Don't unfix the *initial* center node permanently
         exploringNode.fx = null;
         exploringNode.fy = null;
     }
@@ -340,8 +283,8 @@ async function handleExplore(word, container, clickedNodeId = null) {
         // Add node if it doesn't exist
         const existingNode = graphData.nodes.find(n => n.id === cleanConcept);
         if (!existingNode) {
-            // Add new node. D3 simulation will position it.
-             const newNode = { id: cleanConcept, text: cleanConcept, parentId: word };
+            // Add new node.
+             const newNode = { id: cleanConcept, text: cleanConcept, parentId: word }; // Keep parentId for potential future use (e.g., styling)
              graphData.nodes.push(newNode);
              newNodes.push(newNode); // Keep track of newly added nodes
         }
@@ -363,6 +306,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
          newNodes.forEach(newNode => {
              // If the node has no initial position set by the simulation yet,
              // position it near the parent for the start of the transition.
+             // This helps nodes animate from near their parent.
              if (newNode.x === undefined) {
                  newNode.x = parentNode.x;
                  newNode.y = parentNode.y;
