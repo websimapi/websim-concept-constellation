@@ -1,48 +1,103 @@
 // Internal data structure for simulating related words
 // This is a simple lookup table. A more complex version could
 // generate associations dynamically based on patterns.
-const relations = {
-    "cat": ["dog", "pet", "feline", "meow", "animal", "purr"],
-    "dog": ["cat", "pet", "canine", "bark", "animal", "bone"],
-    "animal": ["cat", "dog", "bear", "lion", "creature", "species"],
-    "computer": ["keyboard", "screen", "software", "program", "technology", "internet"],
-    "technology": ["computer", "internet", "science", "innovation", "digital", "future"],
-    "science": ["experiment", "theory", "research", "knowledge", "technology", "physics"],
-    "internet": ["web", "online", "network", "communication", "computer", "data"],
-    "book": ["read", "page", "story", "author", "library", "knowledge"],
-    "music": ["song", "sound", "artist", "instrument", "melody", "listen"],
-    "art": ["painting", "sculpture", "artist", "creative", "visual", "gallery"],
-    "food": ["eat", "delicious", "kitchen", "cook", "taste", "recipe"],
-    "car": ["drive", "road", "engine", "wheel", "vehicle", "travel"],
-    "travel": ["journey", "explore", "destination", "adventure", "car", "plane"],
-    "home": ["house", "family", "comfort", "live", "place", "belong"],
-    "friend": ["buddy", "pal", "companion", "trust", "support", "together"],
-    "happy": ["joy", "smile", "glad", "positive", "feeling", "cheer"],
-    "sad": ["unhappy", "cry", "grief", "negative", "feeling", "blue"],
-    "knowledge": ["learn", "fact", "information", "study", "understand", "science"],
-    // Add more words to expand the network
-};
+// const relations = {
+//     "cat": ["dog", "pet", "feline", "meow", "animal", "purr"],
+//     "dog": ["cat", "pet", "canine", "bark", "animal", "bone"],
+//     "animal": ["cat", "dog", "bear", "lion", "creature", "species"],
+//     "computer": ["keyboard", "screen", "software", "program", "technology", "internet"],
+//     "technology": ["computer", "internet", "science", "innovation", "digital", "future"],
+//     "science": ["experiment", "theory", "research", "knowledge", "technology", "physics"],
+//     "internet": ["web", "online", "network", "communication", "computer", "data"],
+//     "book": ["read", "page", "story", "author", "library", "knowledge"],
+//     "music": ["song", "sound", "artist", "instrument", "melody", "listen"],
+//     "art": ["painting", "sculpture", "artist", "creative", "visual", "gallery"],
+//     "food": ["eat", "delicious", "kitchen", "cook", "taste", "recipe"],
+//     "car": ["drive", "road", "engine", "wheel", "vehicle", "travel"],
+//     "travel": ["journey", "explore", "destination", "adventure", "car", "plane"],
+//     "home": ["house", "family", "comfort", "live", "place", "belong"],
+//     "friend": ["buddy", "pal", "companion", "trust", "support", "together"],
+//     "happy": ["joy", "smile", "glad", "positive", "feeling", "cheer"],
+//     "sad": ["unhappy", "cry", "grief", "negative", "feeling", "blue"],
+//     "knowledge": ["learn", "fact", "information", "study", "understand", "science"],
+//     // Add more words to expand the network
+// };
 
 // Function to generate related words (simulated)
-function generateRelatedWords(word) {
-    const lowerWord = word.toLowerCase().trim();
-    const related = relations[lowerWord];
+// function generateRelatedWords(word) {
+//     const lowerWord = word.toLowerCase().trim();
+//     const related = relations[lowerWord];
 
-    if (related && related.length > 0) {
-        // Shuffle and take up to 5 related words
-        return related.sort(() => 0.5 - Math.random()).slice(0, Math.min(5, related.length));
-    } else {
-        // Fallback for unknown words
-        // Generate some generic fallback concepts
-        const fallbacks = ["concept", "idea", "thing", "relation", "unknown"];
-         return fallbacks.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, fallbacks.length));
+//     if (related && related.length > 0) {
+//         // Shuffle and take up to 5 related words
+//         return related.sort(() => 0.5 - Math.random()).slice(0, Math.min(5, related.length));
+//     } else {
+//         // Fallback for unknown words
+//         // Generate some generic fallback concepts
+//         const fallbacks = ["concept", "idea", "thing", "relation", "unknown"];
+//          return fallbacks.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, fallbacks.length));
+//     }
+// }
+
+// Function to generate related concepts using the AI model
+async function generateRelatedConcepts(word) {
+    const lowerWord = word.toLowerCase().trim();
+
+    if (!lowerWord) {
+        return []; // Return empty if word is empty
+    }
+
+    try {
+        // Use the AI model to generate related concepts
+        const completion = await websim.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a knowledge graph generator. Given a single word, provide a list of 5-7 concepts closely related to it.
+Respond directly with JSON, following this JSON schema, and no other text.
+{
+  "related_concepts": string[];
+}`,
+                },
+                {
+                    role: "user",
+                    content: lowerWord,
+                },
+            ],
+            json: true, // Request JSON output
+        });
+
+        const result = JSON.parse(completion.content);
+
+        if (result && Array.isArray(result.related_concepts)) {
+            // Filter out potential duplicates and the original word itself
+            const uniqueConcepts = [...new Set(result.related_concepts)]
+                .filter(concept => concept.toLowerCase() !== lowerWord)
+                .slice(0, 7); // Limit to 7 concepts
+
+            return uniqueConcepts;
+        } else {
+            console.warn("AI did not return expected JSON format.", completion.content);
+            return []; // Return empty array if format is unexpected
+        }
+
+    } catch (error) {
+        console.error("Error calling AI model:", error);
+        // Fallback or error handling
+        return ["error", "network", "ai", "failed", "try again"];
     }
 }
+
 
 // Function to render the visualization using SVG
 function renderGraph(centerWord, relatedWords, container) {
     // Clear previous content
     container.innerHTML = '';
+
+    if (!relatedWords || relatedWords.length === 0) {
+         container.innerHTML = `<p class="placeholder">No related concepts found for "${centerWord}". Try another word?</p>`;
+         return;
+    }
 
     // Create SVG element
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -107,15 +162,18 @@ function createNode(x, y, text, className) {
 
 
 // Main function to handle exploration
-function exploreWord(word, container) {
+async function exploreWord(word, container) { // Make function async
     if (!word || word.trim() === "") {
         // Display placeholder if input is empty
         container.innerHTML = '<p class="placeholder">Please enter a word.</p>';
         return;
     }
 
-    // Simulate fetching related words
-    const relatedWords = generateRelatedWords(word);
+    // Show a loading indicator
+    container.innerHTML = `<p class="placeholder">Exploring "${word}"...</p>`;
+
+    // Generate related words using the AI model
+    const relatedWords = await generateRelatedConcepts(word); // Use async function
 
     // Render the graph
     renderGraph(word, relatedWords, container);
