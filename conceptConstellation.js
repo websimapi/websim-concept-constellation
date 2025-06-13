@@ -268,7 +268,7 @@ function updateGraph() {
 
 
     // --- Update Patterns (within defs) ---
-    // Ensure defs exists (it should be created in initializeGraph, but belt and suspenders)
+    // Ensure defs exists
     const defs = svg.select("defs");
     if (defs.empty()) {
          svg.insert("defs", ":first-child");
