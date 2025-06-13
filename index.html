@@ -23,6 +23,7 @@
         <div id="visualizationArea" class="visualization-area">
             <!-- SVG visualization will be rendered here by script.js -->
             <!-- Placeholder is now added/managed by script.js -->
+             <!-- Loading overlay will be added/managed by script.js -->
         </div>
     </div>
 
@@ -43,10 +44,8 @@
                     <li>The large green circle in the center is the word you entered initially.</li>
                     <li>Click on any of the smaller blue circles (related concepts) to explore *its* related concepts. These will be added to the existing graph, allowing multi-layer exploration.</li>
                     <li>Lines connect related concepts.</li>
-                    <li>Nodes show an AI-generated image related to the concept text.</li>
                     <li>**Drag nodes:** You can click and drag the nodes to rearrange the graph layout.</li>
                     <li>**Zoom:** Use the mouse scroll wheel, the '+' and '-' buttons, or the '+' and '-' keyboard keys to zoom in and out.</li>
-                    <li>**Pan:** Use the arrow keys (Left, Right, Up, Down) to pan the view.</li>
                 </ul>
 
                 <h2>What's Next? (Ideas for Future Development)</h2>
@@ -54,7 +53,7 @@
                 <ul>
                     <li>**Richer Data:** Fetching more detailed information about concepts using APIs or AI. **-> Implemented (AI provides related terms)**</li>
                     <li>**Multi-Layer Exploration:** Allowing users to see concepts related to the related concepts, creating a deeper, multi-layered graph. **-> Implemented**</li>
-                    <li>**Improved Visualization:** Adding animations for smoother transitions, improving node positioning to reduce overlap, enabling dragging of nodes, and potentially different layout options (like force-directed graphs) for better clarity as the graph grows. **-> Implemented basic force layout, dragging, transitions, increased link distance, collision detection, zoom, pan, image backgrounds.**</li>
+                    <li>**Improved Visualization:** Adding animations for smoother transitions, improving node positioning to reduce overlap, enabling dragging of nodes, and potentially different layout options (like force-directed graphs) for better clarity as the graph grows. **-> Implemented basic force layout, dragging, transitions, increased link distance, collision detection, zoom.**</li>
                     <li>**Concept Information:** Displaying definitions or brief descriptions when hovering over or clicking a concept node.</li>
                     <li>**Search & Filter:** Allowing users to search for specific concepts within a displayed constellation.</li>
                     <li>**Saving & Sharing:** Features to save interesting constellations or share them with others.</li>

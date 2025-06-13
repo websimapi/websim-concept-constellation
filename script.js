@@ -33,5 +33,5 @@ helpModal.addEventListener('click', (event) => {
     }
 });
 
-// Initialize the constellation setup, passing zoom buttons and input field
+// Initialize the constellation setup, passing zoom buttons
 setupConceptConstellation(wordInput, exploreButton, visualizationArea, zoomInButton, zoomOutButton);
