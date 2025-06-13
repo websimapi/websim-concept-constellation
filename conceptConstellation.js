@@ -46,6 +46,7 @@ function updateDimensions(container) {
 // Function to calculate node radius based on text length
 function calculateNodeRadius(d) {
      // Use the same logic as the circle radius, adding a small buffer for collision
+     // Ensure d.text exists before accessing length
      return Math.max(25, 15 + (d.text ? d.text.length : 0) * 3) + 5; // Added 5px buffer
 }
 
@@ -82,7 +83,7 @@ Respond directly with JSON, following this JSON schema, and no other text.
             // Filter out potential duplicates and the original word itself, and clean strings
             const uniqueConcepts = [...new Set(result.related_concepts)]
                 .map(concept => concept.trim().replace(/^['"]|['"]$/g, '')) // Clean potential quotes/spaces
-                .filter(concept => concept !== "" && concept.toLowerCase() !== lowerWord) // Filter empty strings and the original word
+                .filter(concept => concept !== "" && concept.toLowerCase() !== lowerWord) // Filter empty strings and the original word (case-insensitive)
                 .slice(0, 7); // Limit to 7 concepts
 
             return uniqueConcepts;
@@ -163,7 +164,7 @@ function initializeGraph(container) {
       if (!event.active) simulation.alphaTarget(0);
       // Optional: Uncomment these lines if you want nodes to snap back
       // d.fx = null;
-      d.fy = null;
+      // d.fy = null; // Keep y fixed if it's the center node, otherwise null? No, let simulation handle it.
     }
 
     // Store drag function to apply to new nodes
@@ -199,9 +200,8 @@ function updateGraph() {
     // Ensure dimensions are up-to-date before updating graph elements
     updateDimensions(container);
 
-
-    // Update links (append to graphGroup)
-    linkElements = linkElements
+    // Select links within the graphGroup
+    linkElements = graphGroup.selectAll(".relation-line")
         .data(graphData.links, d => d.source.id + "-" + d.target.id) // Data join with key
         .join(
             enter => enter.append("line")
@@ -214,9 +214,9 @@ function updateGraph() {
         );
 
 
-    // Update nodes (circle + text group) (append to graphGroup)
-    nodeElements = nodeElements
-        .data(graphData.nodes, d => d.id) // Data join with key
+    // Select nodes within the graphGroup
+    nodeElements = graphGroup.selectAll(".node")
+        .data(graphData.nodes, d => d.id) // Data join with key (using lowercase ID)
         .join(
             enter => {
                  const group = enter.append("g")
@@ -233,7 +233,7 @@ function updateGraph() {
 
                  // Add text
                  group.append("text")
-                     .text(d => d.text)
+                     .text(d => d.text) // Use node's text property (lowercase)
                      .attr("x", 0)
                      .attr("y", 0)
                      .attr("dy", "0.35em")
@@ -242,7 +242,7 @@ function updateGraph() {
                      .style("user-select", "none");
 
                  // Apply drag behavior
-                 if (svg._dragBehavior) { // Check if drag behavior is defined
+                 if (svg && svg._dragBehavior) { // Check if drag behavior is defined on the svg
                      group.call(svg._dragBehavior);
                  }
 
@@ -251,7 +251,8 @@ function updateGraph() {
                  group.on('click', (event, d) => {
                      // Stop simulation briefly when clicking
                      simulation.alphaTarget(0).stop();
-                     handleExplore(d.id, d3.select("#visualizationArea").node(), d.id); // Explore the clicked word
+                     // Pass the clicked node's lowercase ID for exploration
+                     handleExplore(d.id, d3.select("#visualizationArea").node(), d.id);
                      // Prevent event from bubbling up, potentially interfering with drag end
                      event.stopPropagation();
                  });
@@ -265,8 +266,9 @@ function updateGraph() {
             update => {
                 // Update existing node groups
                  update.select("circle")
-                     .attr("r", calculateNodeRadius); // Re-calculate radius in case text changed (unlikely here)
-                 update.select("text").text(d => d.text); // Update text (unlikely here)
+                     .attr("r", calculateNodeRadius); // Re-calculate radius in case text changed (unlikely here with lowercase)
+                 update.select("text").text(d => d.text); // Update text (unlikely here with lowercase)
+                 // No need to re-apply drag or click listeners, they are attached to the group on enter
                  return update;
              },
             exit => exit.transition().duration(500).style("opacity", 0).remove() // Fade out and remove
@@ -285,7 +287,9 @@ function updateGraph() {
 
 // Main function to handle exploration or node click
 async function handleExplore(word, container, clickedNodeId = null) {
-    if (!word || word.trim() === "") {
+    const lowerWord = word.toLowerCase().trim(); // Use lowercase for canonical ID
+
+    if (!lowerWord) {
         if (!clickedNodeId) { // Only clear and show placeholder if not clicking on a node
              graphData.nodes = [];
              graphData.links = [];
@@ -304,7 +308,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
     const loadingOverlay = document.createElement('div');
     loadingOverlay.classList.add('loading-overlay');
-    loadingOverlay.textContent = `Exploring "${word}"...`;
+    loadingOverlay.textContent = `Exploring "${lowerWord}"...`;
     container.appendChild(loadingOverlay);
 
 
@@ -315,15 +319,15 @@ async function handleExplore(word, container, clickedNodeId = null) {
         // Add the initial node. D3 simulation will position it.
         // Fix center node position based on current dimensions
         updateDimensions(container); // Ensure dimensions are set before fixing center
-        graphData.nodes.push({ id: word, text: word, isCenter: true, fx: centerX, fy: centerY });
+        // Use lowercase for the center node ID and text
+        graphData.nodes.push({ id: lowerWord, text: lowerWord, isCenter: true, fx: centerX, fy: centerY });
          // Initialize SVG and simulation on the first explore
         initializeGraph(container);
     }
     // Note: If clickedNodeId IS provided, we do NOT clear graphData. We add to it.
 
-    // Find the node for the word being explored to set its fixed position temporarily
-    // This helps new nodes spawn relative to it initially
-    const exploringNode = graphData.nodes.find(n => n.id === word);
+    // Find the node for the word being explored (using lowercase ID)
+    const exploringNode = graphData.nodes.find(n => n.id === lowerWord);
      if (exploringNode) {
          // Temporarily fix the position of the node being explored
          // Use current position if available, otherwise center
@@ -333,13 +337,13 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
 
     // Call AI to get related concepts
-    const relatedConcepts = await generateRelatedConcepts(word);
+    const relatedConcepts = await generateRelatedConcepts(lowerWord); // Pass lowercase word to AI
 
     // Remove loading indicator after AI call
     loadingOverlay.remove();
 
-     // Unfix the exploring node after getting results
-    if (exploringNode && !exploringNode.isCenter) { // Don't unfix the *initial* center node permanently
+     // Unfix the exploring node after getting results, unless it's the initial center
+    if (exploringNode && !exploringNode.isCenter) {
         exploringNode.fx = null;
         exploringNode.fy = null;
     }
@@ -348,32 +352,42 @@ async function handleExplore(word, container, clickedNodeId = null) {
     // Add new nodes and links to graphData
     const newNodes = [];
     relatedConcepts.forEach(concept => {
-        const cleanConcept = concept.trim(); // Use trimmed concept for ID and text
+        const cleanConcept = concept.trim();
+        const lowerConcept = cleanConcept.toLowerCase(); // Use lowercase for canonical ID
 
-        if (!cleanConcept) return; // Skip empty concepts
+        if (!lowerConcept) return; // Skip empty lowercase concepts
 
-        // Add node if it doesn't exist
-        const existingNode = graphData.nodes.find(n => n.id === cleanConcept);
+        // Add node if it doesn't exist (check using lowercase ID)
+        const existingNode = graphData.nodes.find(n => n.id === lowerConcept);
+        let targetNode; // Store the node object (existing or new)
+
         if (!existingNode) {
-            // Add new node.
-             const newNode = { id: cleanConcept, text: cleanConcept, parentId: word }; // Keep parentId for potential future use (e.g., styling)
-             graphData.nodes.push(newNode);
-             newNodes.push(newNode); // Keep track of newly added nodes
+            // Add new node. Use lowercase for id and text.
+             targetNode = { id: lowerConcept, text: lowerConcept, parentId: lowerWord }; // Keep parentId as lowercase
+             graphData.nodes.push(targetNode);
+             newNodes.push(targetNode); // Keep track of newly added nodes
+        } else {
+            targetNode = existingNode;
         }
 
-        // Add link if it doesn't exist (check both directions)
+        // Add link if it doesn't exist (check using lowercase IDs)
         const linkExists = graphData.links.some(link =>
-            (link.source.id === word && link.target.id === cleanConcept) ||
-            (link.source.id === cleanConcept && link.target.id === word)
+            // Ensure source and target are node objects from the simulation or node IDs
+            // D3-force handles resolving string IDs to objects if 'id' is specified for the link force
+            (link.source === lowerWord && link.target === lowerConcept) ||
+            (link.source === lowerConcept && link.target === lowerWord) ||
+            (link.source.id === lowerWord && link.target.id === lowerConcept) || // Check if already objects
+            (link.source.id === lowerConcept && link.target.id === lowerWord)
         );
 
         if (!linkExists) {
-            graphData.links.push({ source: word, target: cleanConcept });
+            // Add link using lowercase IDs
+            graphData.links.push({ source: lowerWord, target: lowerConcept });
         }
     });
 
      // Set initial position for new nodes near their parent for smoother animation
-     const parentNode = graphData.nodes.find(n => n.id === word);
+     const parentNode = graphData.nodes.find(n => n.id === lowerWord);
      if (parentNode) {
          newNodes.forEach(newNode => {
              // If the node has no initial position set by the simulation yet,
@@ -415,8 +429,7 @@ function pan(dx, dy) {
         // Apply translation
         const newTransform = currentTransform.translate(dx, dy);
         // Apply the new transform to the SVG
-        // Increase duration for smoother step transition
-        svg.transition().duration(300).call(zoom.transform, newTransform); // Changed duration from 100 to 300
+        svg.transition().duration(100).call(zoom.transform, newTransform);
     }
 }
 
@@ -430,6 +443,7 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
         if (graphData.nodes.length === 0 && word.trim() !== "") {
              initializeGraph(visualizationArea);
         }
+        // Pass original word to handleExplore, it will handle lowercasing internally
         handleExplore(word, visualizationArea); // Initial explore, no clickedNodeId
     });
 
@@ -456,17 +470,20 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
 
     // Add keyboard listeners for zoom and pan
     window.addEventListener('keydown', (event) => {
+        // Prevent default browser zoom for + and - keys
+        if (event.key === '+' || event.key === '=' || event.key === '-') {
+            event.preventDefault();
+        }
+
         const panAmount = 50; // Amount to pan in pixels
 
         switch (event.key) {
             case '+':
             case '=':
                 zoomIn();
-                event.preventDefault(); // Prevent default browser zoom
                 break;
             case '-':
                 zoomOut();
-                event.preventDefault(); // Prevent default browser zoom
                 break;
             case 'ArrowLeft':
                 pan(panAmount, 0); // Pan right (positive dx moves graph content right, so view pans left)
