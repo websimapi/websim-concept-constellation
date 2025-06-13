@@ -8,9 +8,11 @@ let graphData = {
 
 // D3 variables
 let svg;
+let graphGroup; // Group to hold nodes and links, for zooming
 let linkElements;
 let nodeElements;
 let simulation;
+let zoom; // D3 zoom behavior
 // Use dynamic width and height based on the container
 let width = 0;
 let height = 0;
@@ -110,6 +112,9 @@ function initializeGraph(container) {
             .append("svg")
             .attr("viewBox", `0 0 ${width} ${height}`); // Use dynamic dimensions
 
+    // Create a group for the graph elements (nodes and links) that will be zoomed
+    graphGroup = svg.append("g");
+
     // Initialize force simulation
     simulation = d3.forceSimulation(graphData.nodes)
         // Increase distance for more spacing between linked nodes
@@ -119,9 +124,9 @@ function initializeGraph(container) {
         // Add collision force to prevent node overlap
         .force("collide", d3.forceCollide().radius(calculateNodeRadius).iterations(2)); // Use dynamic radius function
 
-    // Create link and node elements
-    linkElements = svg.append("g").selectAll(".relation-line");
-    nodeElements = svg.append("g").selectAll(".node"); // Group for nodes (circle + text)
+    // Create link and node elements (attached to graphGroup)
+    linkElements = graphGroup.append("g").selectAll(".relation-line");
+    nodeElements = graphGroup.append("g").selectAll(".node"); // Group for nodes (circle + text)
 
     // Define the tick function to update positions
     simulation.on("tick", () => {
@@ -164,6 +169,16 @@ function initializeGraph(container) {
     // Store drag function to apply to new nodes
     svg._dragBehavior = drag; // Attach to SVG for easy access
 
+    // --- Zoom Implementation ---
+    zoom = d3.zoom()
+        .scaleExtent([0.1, 4]) // Allow zooming from 0.1x to 4x
+        .on("zoom", (event) => {
+             graphGroup.attr("transform", event.transform); // Apply zoom transform to the graph group
+        });
+
+    // Apply the zoom behavior to the SVG
+    svg.call(zoom);
+
      // Add window resize listener to update dimensions and restart simulation
      window.addEventListener('resize', () => {
          updateDimensions(container);
@@ -176,8 +191,8 @@ function initializeGraph(container) {
 // Function to update D3 elements based on graphData changes
 function updateGraph() {
     const container = d3.select("#visualizationArea").node(); // Get container reference
-    if (!svg || !container) {
-        console.error("SVG or container not initialized before updating graph.");
+    if (!svg || !graphGroup || !container) { // Check for graphGroup existence
+        console.error("SVG, graphGroup, or container not initialized before updating graph.");
         return;
     }
 
@@ -185,7 +200,7 @@ function updateGraph() {
     updateDimensions(container);
 
 
-    // Update links
+    // Update links (append to graphGroup)
     linkElements = linkElements
         .data(graphData.links, d => d.source.id + "-" + d.target.id) // Data join with key
         .join(
@@ -199,7 +214,7 @@ function updateGraph() {
         );
 
 
-    // Update nodes (circle + text group)
+    // Update nodes (circle + text group) (append to graphGroup)
     nodeElements = nodeElements
         .data(graphData.nodes, d => d.id) // Data join with key
         .join(
@@ -208,6 +223,7 @@ function updateGraph() {
                      .attr("class", d => d.isCenter ? "center-node node" : "concept-node node")
                      // Initial position for animation (optional: could be parent position)
                      // Force layout will position them afterwards. Use dynamic center for initial position.
+                     // The initial position is set in handleExplore for new nodes
                      .attr("transform", d => `translate(${d.x || centerX},${d.y || centerY})`)
                      .style("opacity", 0); // Start transparent for fade-in
 
@@ -275,6 +291,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
              graphData.links = [];
              if (svg) svg.remove(); // Remove SVG if exists
              svg = null; // Reset svg variable
+             graphGroup = null; // Reset graphGroup variable
              container.innerHTML = '<p class="placeholder">Enter a word above and click \'Explore\' to see the concept constellation.</p>';
         }
         return;
@@ -376,8 +393,23 @@ async function handleExplore(word, container, clickedNodeId = null) {
     // This is still tricky with incremental updates. For now, rely on the graph not changing.
 }
 
+// Function to programmatically zoom in
+function zoomIn() {
+    if (svg && zoom) {
+        svg.transition().duration(200).call(zoom.scaleBy, 1.2); // Zoom in by 20%
+    }
+}
+
+// Function to programmatically zoom out
+function zoomOut() {
+     if (svg && zoom) {
+        svg.transition().duration(200).call(zoom.scaleBy, 0.8); // Zoom out by 20%
+    }
+}
+
+
 // Setup function called from script.js
-export function setupConceptConstellation(wordInput, exploreButton, visualizationArea) {
+export function setupConceptConstellation(wordInput, exploreButton, visualizationArea, zoomInButton, zoomOutButton) {
     // Add event listener to the button
     exploreButton.addEventListener('click', () => {
         const word = wordInput.value;
@@ -405,4 +437,17 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
     if (container) {
         updateDimensions(container);
     }
+
+    // Add zoom button listeners
+    zoomInButton.addEventListener('click', zoomIn);
+    zoomOutButton.addEventListener('click', zoomOut);
+
+    // Add keyboard listeners for zoom
+    window.addEventListener('keydown', (event) => {
+        if (event.key === '+' || event.key === '=') { // '+' key sometimes needs shift, '=' key is often same physical key
+             zoomIn();
+        } else if (event.key === '-') {
+             zoomOut();
+        }
+    });
 }

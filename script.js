@@ -4,6 +4,8 @@ import { setupConceptConstellation } from "./conceptConstellation.js";
 const wordInput = document.getElementById('wordInput');
 const exploreButton = document.getElementById('exploreButton');
 const visualizationArea = document.getElementById('visualizationArea');
+const zoomInButton = document.getElementById('zoomInButton');
+const zoomOutButton = document.getElementById('zoomOutButton');
 
 // Get references for the help modal
 const helpButton = document.getElementById('helpButton');
@@ -31,5 +33,5 @@ helpModal.addEventListener('click', (event) => {
     }
 });
 
-// Initialize the constellation setup
-setupConceptConstellation(wordInput, exploreButton, visualizationArea);
+// Initialize the constellation setup, passing zoom buttons
+setupConceptConstellation(wordInput, exploreButton, visualizationArea, zoomInButton, zoomOutButton);

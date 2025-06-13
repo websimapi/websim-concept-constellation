@@ -185,7 +185,7 @@ svg text {
     pointer-events: none;
 }
 
-/* New styles for Help Button and Modal */
+/* Styles for Help Button and Modal */
 .help-button {
     position: fixed;
     top: 20px;
@@ -258,4 +258,35 @@ svg text {
 
 .close-button:hover {
     color: #333;
+}
+
+/* Styles for Zoom Controls */
+.zoom-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column; /* Stack buttons vertically */
+    gap: 10px; /* Space between buttons */
+}
+
+.zoom-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.3s ease;
+}
+
+.zoom-button:hover {
+    background-color: #0056b3;
 }
