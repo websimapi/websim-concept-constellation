@@ -106,16 +106,6 @@ async function generateAndAssignImage(node) {
         return; // Cannot generate image without text
     }
 
-    // Only generate if image hasn't been generated and isn't currently loading/errored
-    if (node.imageUrl || node.imageLoading || node.imageError) {
-        return;
-    }
-
-    // Mark node as loading and update graph to show loading text
-    node.imageLoading = true;
-    node.imageError = false; // Clear any previous error
-    updateGraph(); // Update to show loading state
-
     try {
         const result = await websim.imageGen({
             prompt: node.text + ", abstract concept art", // Use node text for prompt, add style hint
@@ -191,12 +181,6 @@ function initializeGraph(container) {
         // Update node group position (translate)
         nodeElements
             .attr("transform", d => `translate(${d.x},${d.y})`);
-
-        // Update pattern positions inside defs - this is crucial if pattern units were objectBoundingBox,
-        // but with userSpaceOnUse positioned relative to the circle's center,
-        // the position should already be relative to the translating group.
-        // However, let's ensure the patterns themselves get updated during the tick
-        // or whenever radius changes. updateGraph handles this.
     });
 
     // Define drag behavior
@@ -288,36 +272,33 @@ function updateGraph() {
                     .attr("patternUnits", "userSpaceOnUse")
                     // Set pattern size based on current radius (diameter)
                     .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2)
-                    // Position the pattern origin at the center of the circle (0,0) in userSpaceOnUse relative to element)
-                    // and shift the content within the pattern to cover the area from -r to +r
-                    .attr("patternContentUnits", "userSpaceOnUse");
-
+                    .attr("height", d => calculateNodeRadius(d) * 2);
 
                 // Background rect for loading/error state or simply behind the image
-                // Position at -r, -r and cover the full pattern area (2r x 2r)
+                // Position at 0,0 and cover the full pattern area (2r x 2r)
                 pattern.append("rect")
-                     .attr("x", d => -calculateNodeRadius(d)) // Corrected position
-                     .attr("y", d => -calculateNodeRadius(d)) // Corrected position
+                     .attr("x", 0)
+                     .attr("y", 0)
                      .attr("width", d => calculateNodeRadius(d) * 2)
                      .attr("height", d => calculateNodeRadius(d) * 2)
                      // Set initial fill - will be updated
                      .attr("fill", "#eee"); // Default gray background
 
-                // Image element - Position at -r, -r and cover the full pattern area (2r x 2r)
+                // Image element - Position at 0,0 and cover the full pattern area (2r x 2r)
+                // FIX: Adjust x, y to center the image within the pattern bounds
                 pattern.append("image")
-                    .attr("x", d => -calculateNodeRadius(d)) // Corrected position
-                    .attr("y", d => -calculateNodeRadius(d)) // Corrected position
-                    .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2)
+                    .attr("x", d => -calculateNodeRadius(d)) // Shift left by radius
+                    .attr("y", d => -calculateNodeRadius(d)) // Shift up by radius
+                    .attr("width", d => calculateNodeRadius(d) * 2) // Keep full width (diameter)
+                    .attr("height", d => calculateNodeRadius(d) * 2) // Keep full height (diameter)
                     .attr("preserveAspectRatio", "xMidYMid slice") // Scale and crop to fill
                     .attr("href", null) // Start with no image URL
                     .style("opacity", 0); // Start hidden
 
-                // Loading/Error text - Position in the center of the pattern area (which is 0,0 with patternContentUnits set to userSpaceOnUse on the circle element)
+                // Loading/Error text - Position in the center of the pattern area (r, r)
                  pattern.append("text")
-                     .attr("x", 0) // Center X
-                     .attr("y", 0) // Center Y
+                     .attr("x", d => calculateNodeRadius(d)) // Center X
+                     .attr("y", d => calculateNodeRadius(d)) // Center Y
                      .attr("dy", "0.35em") // Vertical align tweak
                      .attr("text-anchor", "middle")
                      .attr("fill", "#555")
@@ -336,27 +317,28 @@ function updateGraph() {
 
                 // Update background rect size/position and color
                  update.select("rect")
-                     .attr("x", d => -calculateNodeRadius(d)) // Ensure correct position
-                     .attr("y", d => -calculateNodeRadius(d)) // Ensure correct position
+                     .attr("x", 0) // Ensure correct position
+                     .attr("y", 0) // Ensure correct position
                      .attr("width", d => calculateNodeRadius(d) * 2)
                      .attr("height", d => calculateNodeRadius(d) * 2)
                      .attr("fill", d => d.imageError ? "#fdd" : "#eee"); // Red background on error or grey
 
-                // Update image href and opacity, ensuring correct position and size
+                // Update image href and opacity
                 update.select("image")
-                    .attr("x", d => -calculateNodeRadius(d)) // Ensure correct position
-                    .attr("y", d => -calculateNodeRadius(d)) // Ensure correct position
-                    .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2)
+                    // FIX: Adjust x, y to center the image within the pattern bounds
+                    .attr("x", d => -calculateNodeRadius(d)) // Shift left by radius
+                    .attr("y", d => -calculateNodeRadius(d)) // Shift up by radius
+                    .attr("width", d => calculateNodeRadius(d) * 2) // Keep full width (diameter)
+                    .attr("height", d => calculateNodeRadius(d) * 2) // Keep full height (diameter)
                     .attr("href", d => d.imageUrl ? d.imageUrl : null) // Set or update image URL
                     // Fade in image if loaded and not loading/errored
                     .transition().duration(500)
                     .style("opacity", d => d.imageUrl && !d.imageLoading && !d.imageError ? 1 : 0);
 
-                // Update loading text position (should be 0,0 relative to pattern/circle center) and content/visibility
+                // Update loading text position (if radius changed) and content/visibility
                  update.select("text")
-                     .attr("x", 0) // Ensure correct position
-                     .attr("y", 0) // Ensure correct position
+                     .attr("x", d => calculateNodeRadius(d)) // Center X
+                     .attr("y", d => calculateNodeRadius(d)) // Center Y
                      .text(d => d.imageLoading ? "Loading..." : (d.imageError ? "Error" : "")) // Update text content
                      .style("opacity", d => d.imageLoading || d.imageError ? 1 : 0); // Show if loading or error
 
@@ -475,56 +457,31 @@ async function handleExplore(word, container, clickedNodeId = null) {
     container.appendChild(loadingOverlay);
 
 
-    // Find or create the central node for this exploration
-    let centralNode = graphData.nodes.find(n => n.id === lowerWord);
+    // If it's a new initial exploration from the input box
+    if (!clickedNodeId) {
+        graphData.nodes = [];
+        graphData.links = [];
+        // Add the initial node. Use lowercase for ID, original case for display text.
+        // Fix center node position based on current dimensions
+        updateDimensions(container); // Ensure dimensions are set before fixing center
+        const centerNode = { id: lowerWord, text: word.trim(), isCenter: true, fx: centerX, fy: centerY, imageLoading: true };
+        graphData.nodes.push(centerNode);
 
-    // If it's a new initial exploration from the input box OR if the node doesn't exist yet
-    if (!clickedNodeId || !centralNode) {
-         // If it's a new exploration from the input box, clear the existing graph
-         if (!clickedNodeId) {
-            graphData.nodes = [];
-            graphData.links = [];
-            // Initialize SVG and simulation on the first explore
-            initializeGraph(container);
-         }
-
-        // Add the initial/central node if it doesn't exist.
-        // Use lowercase for ID, original case for display text.
-        if (!centralNode) {
-            // Fix center node position based on current dimensions
-            updateDimensions(container); // Ensure dimensions are set before fixing center
-            centralNode = { id: lowerWord, text: word.trim(), isCenter: !clickedNodeId, fx: centerX, fy: centerY };
-            graphData.nodes.push(centralNode);
-             // Mark for image loading
-            centralNode.imageLoading = true;
-            // Trigger image generation for the central node asynchronously
-            generateAndAssignImage(centralNode);
-        } else {
-             // If node already exists (e.g., clicked from somewhere else but becoming "central" for this explore action)
-             // Ensure its position is fixed temporarily
-             centralNode.fx = centralNode.x || centerX;
-             centralNode.fy = centralNode.y || centerY;
-             // If image failed previously, maybe try generating again?
-             if (!centralNode.imageUrl && !centralNode.imageLoading) {
-                 centralNode.imageLoading = true;
-                 generateAndAssignImage(centralNode); // Trigger image generation
-                 updateGraph(); // Show loading state
-             }
-        }
-
-        // Update the graph to show the central node (with loading state)
+         // Initialize SVG and simulation on the first explore
+        initializeGraph(container);
         updateGraph(); // Initial draw with loading state visible for the center node
+
+        // Generate image for center node asynchronously
+        generateAndAssignImage(centerNode);
 
     } else {
         // If clicking an existing node, find it to temporarily fix position
-         // Use current position if available, otherwise center
-        centralNode.fx = centralNode.x || centerX;
-        centralNode.fy = centralNode.y || centerY;
-         // If image failed previously, maybe try generating again?
-         if (!centralNode.imageUrl && !centralNode.imageLoading) {
-             centralNode.imageLoading = true;
-             generateAndAssignImage(centralNode); // Trigger image generation
-             updateGraph(); // Show loading state
+        const exploringNode = graphData.nodes.find(n => n.id === lowerWord);
+         if (exploringNode) {
+             // Temporarily fix the position of the node being explored
+             // Use current position if available, otherwise center
+            exploringNode.fx = exploringNode.x || centerX;
+            exploringNode.fy = exploringNode.y || centerY;
          }
     }
 
@@ -536,20 +493,22 @@ async function handleExplore(word, container, clickedNodeId = null) {
     loadingOverlay.remove();
 
     // Unfix the exploring node after getting results, unless it's the initial center
-    if (centralNode && !centralNode.isCenter) {
-        centralNode.fx = null;
-        centralNode.fy = null;
+    const exploringNode = graphData.nodes.find(n => n.id === lowerWord); // Find again in case it was just added
+    if (exploringNode && !exploringNode.isCenter) {
+        exploringNode.fx = null;
+        exploringNode.fy = null;
     }
 
 
     // Add new nodes and links to graphData
+    const parentNode = graphData.nodes.find(n => n.id === lowerWord);
     const newNodesToAdd = []; // Keep track of brand new nodes
 
     relatedConcepts.forEach(concept => {
         const cleanConcept = concept.trim();
         const lowerConcept = cleanConcept.toLowerCase(); // Use lowercase for canonical ID
 
-        if (!lowerConcept || lowerConcept === lowerWord) return; // Skip empty or self-referencing concepts
+        if (!lowerConcept) return; // Skip empty lowercase concepts
 
         // Add node if it doesn't exist (check using lowercase ID)
         const existingNode = graphData.nodes.find(n => n.id === lowerConcept);
@@ -567,23 +526,19 @@ async function handleExplore(word, container, clickedNodeId = null) {
              newNodesToAdd.push(targetNode); // This node needs image generation
         } else {
             targetNode = existingNode; // Node already exists
-            // If an existing node was clicked and its image failed, retry generating
-             if (!targetNode.imageUrl && !targetNode.imageLoading && targetNode.imageError) {
-                targetNode.imageError = false; // Clear error state
-                targetNode.imageLoading = true; // Mark for retry
-                 newNodesToAdd.push(targetNode); // Add to list to retry image gen
-             }
+            // If an existing node was clicked, but its image failed, retry? Or only retry if user explicitly asks?
+            // For now, only generate for brand new nodes.
         }
 
-        // Add link if it doesn't exist between the central node and the target node
-        const linkExists = graphData.links.some(link => {
-            // Check using node objects or string IDs, accounting for source/target order
-            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-            return (sourceId === lowerWord && targetId === lowerConcept) ||
-                   (sourceId === lowerConcept && targetId === lowerWord);
-        });
-
+        // Add link if it doesn't exist (check using lowercase IDs)
+        const linkExists = graphData.links.some(link =>
+            // Ensure source and target are node objects from the simulation or node IDs
+            // D3-force handles resolving string IDs to objects if 'id' is specified for the link force
+            (link.source === lowerWord && link.target === lowerConcept) ||
+            (link.source === lowerConcept && link.target === lowerWord) ||
+            (link.source.id === lowerWord && link.target.id === lowerConcept) || // Check if already objects
+            (link.source.id === lowerConcept && link.target.id === lowerWord)
+        );
 
         if (!linkExists) {
             // Add link using lowercase IDs
@@ -593,21 +548,21 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
      // Set initial position for brand new nodes near their parent for smoother animation
      // And trigger image generation for these new nodes
-     if (centralNode) { // Use centralNode (the node being explored from)
+     if (parentNode) {
          newNodesToAdd.forEach(newNode => {
-             // Only set initial position if it hasn't been set by simulation or drag
              if (newNode.x === undefined) {
-                 // Position new nodes near the central node with a slight random offset
-                 newNode.x = centralNode.x + (Math.random() - 0.5) * 50;
-                 newNode.y = centralNode.y + (Math.random() - 0.5) * 50;
+                 newNode.x = parentNode.x;
+                 newNode.y = parentNode.y;
              }
-             // Trigger image generation for nodes added or needing retry
+             // Trigger image generation for newly added nodes
              generateAndAssignImage(newNode); // Async call
          });
      }
 
     // Update the D3 graph representation to show new nodes (with loading state) and links
     updateGraph();
+
+    // No need for clicked node feedback if no new concepts added, the graph just won't change.
 }
 
 // Function to programmatically zoom in
