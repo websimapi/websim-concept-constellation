@@ -8,7 +8,7 @@ let graphData = {
 
 // D3 variables
 let svg;
-let graphGroup; // Group to hold nodes and links, for zooming
+let graphGroup; // Group to hold nodes and links, for zooming and panning
 let linkElements;
 let nodeElements;
 let simulation;
@@ -112,7 +112,7 @@ function initializeGraph(container) {
             .append("svg")
             .attr("viewBox", `0 0 ${width} ${height}`); // Use dynamic dimensions
 
-    // Create a group for the graph elements (nodes and links) that will be zoomed
+    // Create a group for the graph elements (nodes and links) that will be zoomed/panned
     graphGroup = svg.append("g");
 
     // Initialize force simulation
@@ -163,7 +163,7 @@ function initializeGraph(container) {
       if (!event.active) simulation.alphaTarget(0);
       // Optional: Uncomment these lines if you want nodes to snap back
       // d.fx = null;
-      // d.fy = null;
+      d.fy = null;
     }
 
     // Store drag function to apply to new nodes
@@ -407,6 +407,17 @@ function zoomOut() {
     }
 }
 
+// Function to programmatically pan
+function pan(dx, dy) {
+    if (svg && zoom) {
+        // Get current transform
+        const currentTransform = d3.zoomTransform(svg.node());
+        // Apply translation
+        const newTransform = currentTransform.translate(dx, dy);
+        // Apply the new transform to the SVG
+        svg.transition().duration(100).call(zoom.transform, newTransform);
+    }
+}
 
 // Setup function called from script.js
 export function setupConceptConstellation(wordInput, exploreButton, visualizationArea, zoomInButton, zoomOutButton) {
@@ -442,12 +453,39 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
     zoomInButton.addEventListener('click', zoomIn);
     zoomOutButton.addEventListener('click', zoomOut);
 
-    // Add keyboard listeners for zoom
+    // Add keyboard listeners for zoom and pan
     window.addEventListener('keydown', (event) => {
-        if (event.key === '+' || event.key === '=') { // '+' key sometimes needs shift, '=' key is often same physical key
-             zoomIn();
-        } else if (event.key === '-') {
-             zoomOut();
+        const panAmount = 50; // Amount to pan in pixels
+
+        switch (event.key) {
+            case '+':
+            case '=':
+                zoomIn();
+                event.preventDefault(); // Prevent default browser zoom
+                break;
+            case '-':
+                zoomOut();
+                event.preventDefault(); // Prevent default browser zoom
+                break;
+            case 'ArrowLeft':
+                pan(panAmount, 0); // Pan right (positive dx moves graph content right, so view pans left)
+                event.preventDefault(); // Prevent page scroll
+                break;
+            case 'ArrowRight':
+                pan(-panAmount, 0); // Pan left (negative dx moves graph content left, so view pans right)
+                event.preventDefault(); // Prevent page scroll
+                break;
+            case 'ArrowUp':
+                pan(0, panAmount); // Pan down (positive dy moves graph content down, so view pans up)
+                event.preventDefault(); // Prevent page scroll
+                break;
+            case 'ArrowDown':
+                pan(0, -panAmount); // Pan up (negative dy moves graph content up, so view pans down)
+                event.preventDefault(); // Prevent page scroll
+                break;
+            default:
+                // Do nothing for other keys
+                break;
         }
     });
 }
