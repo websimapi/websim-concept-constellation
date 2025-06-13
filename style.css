@@ -97,35 +97,39 @@ p {
 }
 
 /* SVG Styles */
+/* Circle fill is handled by JS using colors or patterns */
 .node circle {
     stroke: #fff;
     stroke-width: 2px;
     cursor: pointer;
-    transition: fill 0.3s ease;
 }
 
 .concept-node circle {
+    /* Initial/fallback fill, overridden by JS */
     fill: #007bff;
 }
 
 .concept-node circle:hover {
-    fill: #0056b3;
+    /* Hover effect, overridden by JS if image is present */
+     fill: #0056b3;
 }
 
 .node text {
-    fill: #fff;
+    fill: #fff; /* Keep text white for visibility over images */
     font-size: 12px;
     text-anchor: middle;
     dominant-baseline: central;
-    pointer-events: none;
+    pointer-events: none; /* Prevent text from interfering with mouse events on circle */
     user-select: none;
 }
 
 .center-node circle {
+     /* Initial/fallback fill, overridden by JS */
      fill: #28a745;
 }
 
 .center-node circle:hover {
+     /* Hover effect, overridden by JS if image is present */
      fill: #218838;
 }
 

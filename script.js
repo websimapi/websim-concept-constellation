@@ -33,5 +33,12 @@ helpModal.addEventListener('click', (event) => {
     }
 });
 
+// Optional: Close modal with Escape key
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        hideModal();
+    }
+});
+
 // Initialize the constellation setup, passing zoom buttons
 setupConceptConstellation(wordInput, exploreButton, visualizationArea, zoomInButton, zoomOutButton);
