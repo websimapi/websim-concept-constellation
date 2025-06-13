@@ -32,7 +32,10 @@ function updateDimensions(container) {
      if (simulation) {
         simulation.force("center", d3.forceCenter(centerX, centerY));
         // Restart simulation with updated center force
-        simulation.alpha(0.3).restart();
+        // Only restart if the simulation is running (i.e., after initial data load)
+         if (simulation.alpha() > simulation.alphaMin()) {
+             simulation.alpha(0.3).restart();
+         }
     }
 
     // If center node exists, update its fixed position
@@ -106,6 +109,18 @@ async function generateAndAssignImage(node) {
         return; // Cannot generate image without text
     }
 
+    // Only attempt image generation if node doesn't already have an image or isn't already loading/error
+    if (node.imageUrl || node.imageLoading || node.imageError) {
+         // Ensure text/loading state is correct if retrying or updating graph after initial call
+         // This might be called multiple times during graph updates, so check state first
+        if (node.imageLoading || node.imageError) {
+             // Already loading or in error state, update graph just in case
+             updateGraph();
+        }
+         return;
+    }
+
+
     // Set loading state and update graph to show "Loading..."
     node.imageLoading = true;
     node.imageError = false;
@@ -158,7 +173,10 @@ function initializeGraph(container) {
     svg.insert("defs", ":first-child");
 
     // Create a group for the graph elements (nodes and links) that will be zoomed/panned
+    // Links group should be added first so it's underneath nodes
     graphGroup = svg.append("g");
+    graphGroup.append("g").attr("class", "links"); // Group for links
+    graphGroup.append("g").attr("class", "nodes"); // Group for nodes
 
     // Initialize force simulation
     simulation = d3.forceSimulation(graphData.nodes)
@@ -169,11 +187,9 @@ function initializeGraph(container) {
         // Add collision force to prevent node overlap
         .force("collide", d3.forceCollide().radius(d => calculateNodeRadius(d) + 2).iterations(2)); // Use dynamic radius function + a little extra buffer
 
-    // Create group for links (will be appended first to be underneath)
-    linkElements = graphGroup.append("g").attr("class", "links").selectAll(".relation-line");
-
-    // Create group for nodes (will be appended second to be on top)
-    nodeElements = graphGroup.append("g").attr("class", "nodes").selectAll(".node"); // Group for nodes (circle + text)
+    // Select link and node elements within their respective groups
+    linkElements = graphGroup.select(".links").selectAll(".relation-line");
+    nodeElements = graphGroup.select(".nodes").selectAll(".node");
 
     // Define the tick function to update positions
     simulation.on("tick", () => {
@@ -229,9 +245,11 @@ function initializeGraph(container) {
      // Add window resize listener to update dimensions and restart simulation
      window.addEventListener('resize', () => {
          updateDimensions(container);
-         // Need to call updateGraph() or similar to ensure nodes and links are re-bound
-         // Or simply restart simulation, forces should handle re-centering
-          simulation.alpha(1).restart();
+          // Restart simulation, forces should handle re-centering and repositioning
+          // Check if simulation exists and has nodes before restarting
+          if (simulation && graphData.nodes.length > 0) {
+               simulation.alpha(1).restart();
+          }
      });
 }
 
@@ -279,36 +297,36 @@ function updateGraph() {
             enter => {
                 const pattern = enter.append("pattern")
                     .attr("id", d => `pattern-${d.id}`)
-                    .attr("patternUnits", "userSpaceOnUse")
-                    // Set pattern size based on current radius (diameter)
-                    .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2);
+                    .attr("patternUnits", "objectBoundingBox") // Use objectBoundingBox
+                    // Set pattern size to cover the bounding box (100%)
+                    .attr("x", 0).attr("y", 0) // Start at top-left of bounding box
+                    .attr("width", 1) // Cover 100% of bounding box width
+                    .attr("height", 1); // Cover 100% of bounding box height
 
                 // Background rect for loading/error state or simply behind the image
-                // Position at 0,0 and cover the full pattern area (2r x 2r)
+                // Position at 0,0 and cover the full pattern area (1x1 in bounding box units)
                 pattern.append("rect")
                      .attr("x", 0)
                      .attr("y", 0)
-                     .attr("width", d => calculateNodeRadius(d) * 2)
-                     .attr("height", d => calculateNodeRadius(d) * 2)
+                     .attr("width", 1) // Cover 100%
+                     .attr("height", 1) // Cover 100%
                      // Set initial fill - will be updated
-                     .attr("fill", "#eee"); // Default gray background
+                     .attr("fill", d => d.imageError ? "#fdd" : "#eee"); // Red on error, grey otherwise
 
-                // Image element - Position at 0,0 and cover the full pattern area (2r x 2r)
-                // FIX: Image needs to be placed at 0,0 within the pattern's coordinate system
+                // Image element - Position at 0,0 and cover the full pattern area (1x1 in bounding box units)
                 pattern.append("image")
-                    .attr("x", 0) // Corrected: Place image at the pattern origin
-                    .attr("y", 0) // Corrected: Place image at the pattern origin
-                    .attr("width", d => calculateNodeRadius(d) * 2) // Keep full width (diameter)
-                    .attr("height", d => calculateNodeRadius(d) * 2) // Keep full height (diameter)
+                    .attr("x", 0) // Start at top-left of bounding box
+                    .attr("y", 0) // Start at top-left of bounding box
+                    .attr("width", 1) // Cover 100%
+                    .attr("height", 1) // Cover 100%
                     .attr("preserveAspectRatio", "xMidYMid slice") // Scale and crop to fill
                     .attr("href", null) // Start with no image URL
                     .style("opacity", 0); // Start hidden
 
-                // Loading/Error text - Position in the center of the pattern area (r, r)
+                // Loading/Error text - Position in the center of the pattern area (0.5, 0.5 in bounding box units)
                  pattern.append("text")
-                     .attr("x", d => calculateNodeRadius(d)) // Center X within the 2r x 2r pattern area
-                     .attr("y", d => calculateNodeRadius(d)) // Center Y within the 2r x 2r pattern area
+                     .attr("x", 0.5) // Center X within the 1x1 pattern area (in bounding box units)
+                     .attr("y", 0.5) // Center Y within the 1x1 pattern area (in bounding box units)
                      .attr("dy", "0.35em") // Vertical align tweak
                      .attr("text-anchor", "middle")
                      .attr("fill", "#555")
@@ -321,34 +339,33 @@ function updateGraph() {
                 return pattern;
             },
             update => {
-                // Update pattern dimensions (if radius changed)
-                update.attr("width", d => calculateNodeRadius(d) * 2)
-                      .attr("height", d => calculateNodeRadius(d) * 2);
+                // Pattern attributes (x,y,width,height) should remain 0,0,1,1 for objectBoundingBox
+                update.attr("x", 0).attr("y", 0).attr("width", 1).attr("height", 1);
 
                 // Update background rect size/position and color
                  update.select("rect")
                      .attr("x", 0) // Ensure correct position
                      .attr("y", 0) // Ensure correct position
-                     .attr("width", d => calculateNodeRadius(d) * 2)
-                     .attr("height", d => calculateNodeRadius(d) * 2)
+                     .attr("width", 1) // Ensure correct size
+                     .attr("height", 1) // Ensure correct size
                      .attr("fill", d => d.imageError ? "#fdd" : "#eee"); // Red background on error or grey
 
                 // Update image href and opacity
                 update.select("image")
-                    // Corrected: Place image at the pattern origin
+                    // Positions and size should be 0,0,1,1 for objectBoundingBox
                     .attr("x", 0)
                     .attr("y", 0)
-                    .attr("width", d => calculateNodeRadius(d) * 2) // Keep full width (diameter)
-                    .attr("height", d => calculateNodeRadius(d) * 2) // Keep full height (diameter)
+                    .attr("width", 1)
+                    .attr("height", 1)
                     .attr("href", d => d.imageUrl ? d.imageUrl : null) // Set or update image URL
                     // Fade in image if loaded and not loading/errored
                     .transition().duration(500)
                     .style("opacity", d => d.imageUrl && !d.imageLoading && !d.imageError ? 1 : 0);
 
-                // Update loading text position (if radius changed) and content/visibility
+                // Update loading text position (should remain 0.5, 0.5) and content/visibility
                  update.select("text")
-                     .attr("x", d => calculateNodeRadius(d)) // Center X within the 2r x 2r pattern area
-                     .attr("y", d => calculateNodeRadius(d)) // Center Y within the 2r x 2r pattern area
+                     .attr("x", 0.5) // Center X within the 1x1 pattern area (in bounding box units)
+                     .attr("y", 0.5) // Center Y within the 1x1 pattern area (in bounding box units)
                      .text(d => d.imageLoading ? "Loading..." : (d.imageError ? "Error" : "")) // Update text content
                      .style("opacity", d => d.imageLoading || d.imageError ? 1 : 0); // Show if loading or error
 
@@ -366,8 +383,14 @@ function updateGraph() {
             enter => {
                  const group = enter.append("g")
                      .attr("class", d => d.isCenter ? "center-node node" : "concept-node node")
-                     // Initial position for animation
-                     .attr("transform", d => `translate(${d.x || centerX},${d.y || centerY})`)
+                     // Initial position for animation (start near center or parent)
+                     .attr("transform", d => {
+                         // Use existing position if available, otherwise parent position or center
+                         const startX = d.x || (d.parentId ? graphData.nodes.find(n => n.id === d.parentId)?.x : centerX);
+                         const startY = d.y || (d.parentId ? graphData.nodes.find(n => n.id === d.parentId)?.y : centerY);
+                         // Ensure startX/Y are valid numbers, default to center if parent not found
+                         return `translate(${startX || centerX},${startY || centerY})`;
+                     })
                      .style("opacity", 0); // Start transparent for fade-in
 
                  // Add circle, filled with the corresponding pattern
@@ -386,7 +409,7 @@ function updateGraph() {
                      .style("user-select", "none")
                      // Add stroke/shadow to make text visible on busy backgrounds
                      .style("stroke", "black") // Black stroke
-                     .style("stroke-width", 1) // Thin stroke
+                     .style("stroke-width", 2) // Increased stroke width for contrast
                      .style("paint-order", "stroke") // Draw stroke first, then fill
                      .attr("fill", "white"); // White fill text color
 
@@ -485,14 +508,15 @@ async function handleExplore(word, container, clickedNodeId = null) {
         generateAndAssignImage(centerNode);
 
     } else {
-        // If clicking an existing node, find it to temporarily fix position
+        // If clicking an existing node, find it
         const exploringNode = graphData.nodes.find(n => n.id === lowerWord);
          if (exploringNode) {
-             // Temporarily fix the position of the node being explored
-             // Use current position if available, otherwise center
-            exploringNode.fx = exploringNode.x || centerX;
-            exploringNode.fy = exploringNode.y || centerY;
-            // Also set loading state for the clicked node
+            // Temporarily fix the position of the node being explored if it's not the center
+            if (!exploringNode.isCenter) {
+                 exploringNode.fx = exploringNode.x || centerX;
+                 exploringNode.fy = exploringNode.y || centerY;
+            }
+            // Also set loading state for the clicked node visually
              exploringNode.imageLoading = true; // Mark for image loading
              exploringNode.imageError = false;
              updateGraph(); // Update to show loading state for the clicked node
@@ -506,23 +530,11 @@ async function handleExplore(word, container, clickedNodeId = null) {
     // Remove loading indicator after AI call
     loadingOverlay.remove();
 
-    // Unfix the exploring node after getting results, unless it's the initial center
-    const exploringNode = graphData.nodes.find(n => n.id === lowerWord); // Find again in case it was just added
-    if (exploringNode) {
-        // If it was the center node, keep it fixed. Otherwise, unfix it.
-        if (!exploringNode.isCenter) {
-            exploringNode.fx = null;
-            exploringNode.fy = null;
-        }
-        // Clear loading/error state on the clicked node after results
-        exploringNode.imageLoading = false;
-        exploringNode.imageError = false;
-    }
-
+    // Find the parent node again as graphData.nodes might have been updated
+    const parentNode = graphData.nodes.find(n => n.id === lowerWord);
 
     // Add new nodes and links to graphData
-    const parentNode = graphData.nodes.find(n => n.id === lowerWord);
-    const newNodesToAdd = []; // Keep track of brand new nodes
+    const newNodesAdded = []; // Keep track of brand new nodes added in this step
 
     relatedConcepts.forEach(concept => {
         const cleanConcept = concept.trim();
@@ -540,14 +552,18 @@ async function handleExplore(word, container, clickedNodeId = null) {
                  id: lowerConcept,
                  text: cleanConcept, // Store cleaned version for display
                  parentId: lowerWord,
-                 imageLoading: true // Mark for image loading
+                 imageLoading: true // Mark for image loading initially
              };
              graphData.nodes.push(targetNode);
-             newNodesToAdd.push(targetNode); // This node needs image generation
+             newNodesAdded.push(targetNode); // This node is new
         } else {
             targetNode = existingNode; // Node already exists
-            // If the link doesn't exist, we still need to add it, even if the node is old.
-             // If node existed but image failed, we could retry here, but maybe too aggressive.
+             // If node existed but image failed, re-trigger generation? (Decided against aggressive retry for now)
+             // If node existed but was marked loading/error from the click, clear that now.
+             if (targetNode.imageLoading || targetNode.imageError) {
+                 targetNode.imageLoading = false;
+                 targetNode.imageError = false;
+             }
         }
 
         // Add link if it doesn't exist (check using lowercase IDs)
@@ -557,6 +573,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
              // D3-force handles resolving string IDs to objects if 'id' is specified for the link force
              const linkSourceId = typeof link.source === 'object' ? link.source.id : link.source;
              const linkTargetId = typeof link.target === 'object' ? link.target.id : link.target;
+             // Check both directions
              return (linkSourceId === lowerWord && linkTargetId === lowerConcept) ||
                     (linkSourceId === lowerConcept && linkTargetId === lowerWord);
         });
@@ -571,15 +588,23 @@ async function handleExplore(word, container, clickedNodeId = null) {
      // Set initial position for brand new nodes near their parent for smoother animation
      // And trigger image generation for these new nodes
      if (parentNode) {
-         newNodesToAdd.forEach(newNode => {
-             if (newNode.x === undefined) {
-                 newNode.x = parentNode.x;
-                 newNode.y = parentNode.y;
+         newNodesAdded.forEach(newNode => {
+             // Only set initial position if it hasn't been set by the simulation yet
+             if (newNode.x === undefined || newNode.y === undefined) {
+                 newNode.x = parentNode.x || centerX; // Start at parent or center
+                 newNode.y = parentNode.y || centerY;
              }
              // Trigger image generation for newly added nodes
              generateAndAssignImage(newNode); // Async call
          });
      }
+
+     // Unfix the exploring node after getting results, unless it's the initial center
+    if (parentNode && !parentNode.isCenter) {
+        parentNode.fx = null;
+        parentNode.fy = null;
+    }
+
 
     // Update the D3 graph representation to show new nodes (with loading state) and links
     updateGraph();
