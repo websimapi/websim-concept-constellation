@@ -104,8 +104,8 @@ function dragged(event) {
 function dragended(event) {
   if (!event.active) simulation.alphaTarget(0);
   // Optional: uncomment to let forces take over after drag ends
-  // event.subject.fx = null;
-  // event.subject.fy = null;
+  event.subject.fx = null; // Release the node horizontally
+  event.subject.fy = null; // Release the node vertically
 }
 
 
@@ -144,7 +144,7 @@ function renderGraph(container) {
         // Initialize the force simulation
         simulation = d3.forceSimulation(graphData.nodes)
             .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100)) // Link force with specified distance
-            .force("charge", d3.forceManyBody().strength(-300)) // Node repulsion force
+            .force("charge", d3.forceManyBody().strength(-400)) // Node repulsion force (slightly increased)
             .force("center", d3.forceCenter(400, 250)) // Center force (center of 800x500 viewbox)
             .on("tick", ticked); // Attach tick handler
     } else {
@@ -159,7 +159,8 @@ function renderGraph(container) {
 
     // Update links using join
     const links = linkGroup.selectAll("line")
-        .data(graphData.links, d => d.source.id + "-" + d.target.id); // Use a key function for efficient updates
+        // Use a robust key function that sorts source and target IDs
+        .data(graphData.links, d => [d.source.id, d.target.id].sort().join("-"));
 
     links.join(
         enter => enter.append("line")
@@ -183,7 +184,7 @@ function renderGraph(container) {
                     .on("drag", dragged)
                     .on("end", dragended))
                 .on("click", (event, d) => { // Add click listener for exploration
-                     // Prevent immediate exploration if just finished dragging
+                     // Prevent immediate exploration if just finished dragging (D3 sets event.defaultPrevented)
                      if (event.defaultPrevented) return;
                      // Explore the clicked node's relations
                      handleExplore(d.id, currentContainer, d.id);
@@ -213,8 +214,11 @@ function renderGraph(container) {
     );
 
     // Restart simulation with updated data if it's not already running strongly
-    if (simulation.alpha() < 0.1) { // Check if simulation is close to settling
+    if (simulation.alpha() < 0.5) { // Check if simulation is close to settling (increased threshold slightly)
          simulation.alpha(1).restart(); // Restart with full strength
+    } else {
+        // If already running strong, just re-heat it slightly
+        simulation.alpha(simulation.alpha() + 0.1).restart();
     }
 }
 
@@ -242,7 +246,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
         // Add the new central node. This is the *only* node marked as the initial center.
         graphData.nodes.push({ id: lowerWord, text: lowerWord, isCenter: true });
     } else {
-         // If clicking an existing node, check if it exists. Add if somehow missing (shouldn't happen).
+         // If clicking an existing node, ensure it exists (should always, but defensive check)
          const targetNodeExists = graphData.nodes.some(n => n.id === lowerWord);
          if (!targetNodeExists) {
              console.warn(`Clicked node "${lowerWord}" not found in graphData, adding it.`);
@@ -281,8 +285,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
          currentLoadingOverlay.remove();
     }
 
-
-    // Add new nodes and links to graphData
+    // Add new nodes and links to graphData based on related concepts
     relatedConcepts.forEach(concept => {
         const cleanConcept = concept.trim();
 
@@ -291,27 +294,38 @@ async function handleExplore(word, container, clickedNodeId = null) {
             return;
         }
 
-        // Add node if it doesn't exist
-        const existingNode = graphData.nodes.find(n => n.id === cleanConcept);
-        if (!existingNode) {
-            // Add new node. D3 simulation will position it. Not the initial center.
-             graphData.nodes.push({ id: cleanConcept, text: cleanConcept, isCenter: false });
-        }
+        // --- Logic to ensure unique nodes and links ---
 
-        // Add link if it doesn't exist (check both directions)
+        // 1. Find or add the target node (the related concept)
+        let targetNode = graphData.nodes.find(n => n.id === cleanConcept);
+        if (!targetNode) {
+            // If node doesn't exist, add it to the graph data
+            targetNode = { id: cleanConcept, text: cleanConcept, isCenter: false };
+            graphData.nodes.push(targetNode);
+            // Note: The new node is added to the array, D3 will handle rendering it.
+        }
+        // Else: The node already exists, we will link to the existing node.
+
+        // 2. Add a link between the source node (the one being explored, `lowerWord`) and the target node
+        // Check if a link already exists between lowerWord and cleanConcept (in either direction)
         const linkExists = graphData.links.some(link =>
-            // Check using node IDs (source and target properties can be IDs or objects)
-            (link.source.id === lowerWord && link.target.id === cleanConcept) ||
-            (link.source.id === cleanConcept && link.target.id === lowerWord)
+            // Use sorted IDs for robust comparison
+            [link.source.id, link.target.id].sort().join("-") === [lowerWord, cleanConcept].sort().join("-")
         );
 
         if (!linkExists) {
+             // If link doesn't exist, add it to the graph data
              // Add link using node IDs; D3's forceLink.id() will resolve them to node objects
             graphData.links.push({ source: lowerWord, target: cleanConcept });
+             // Note: The new link is added to the array, D3 will handle rendering it.
         }
+        // Else: The link already exists, do nothing.
     });
 
+
     // Render the updated graph with the newly added nodes and links
+    // D3's join method will automatically create elements for new data,
+    // update existing elements, and remove elements no longer in the data.
     renderGraph(container);
 }
 
