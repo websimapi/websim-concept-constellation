@@ -72,7 +72,8 @@ p {
 .visualization-area svg {
     width: 100%;
     height: 100%;
-    display: block; /* Prevents extra space below SVG */
+    /* Important for D3 drag */
+    pointer-events: all;
 }
 
 .placeholder {
@@ -81,28 +82,31 @@ p {
 }
 
 /* SVG Styles */
-/* Target the circle within the group */
-.concept-node circle {
-    fill: #007bff;
+/* Base style for all nodes */
+.node circle {
     stroke: #fff;
     stroke-width: 2px;
-    cursor: pointer; /* Indicate interactivity */
+    cursor: pointer;
     transition: fill 0.3s ease;
+}
+
+.concept-node circle {
+    fill: #007bff;
 }
 
 .concept-node circle:hover {
     fill: #0056b3;
 }
 
-/* Target the text within the group */
-.concept-node text {
+.node text {
     fill: #fff;
     font-size: 12px;
+    text-anchor: middle;
+    dominant-baseline: central;
     pointer-events: none; /* Make text not intercept mouse events */
     user-select: none; /* Prevent text selection */
 }
 
-/* Target the group for the center node */
 .center-node circle {
      fill: #28a745; /* Different color for the center node */
 }
@@ -111,9 +115,11 @@ p {
      fill: #218838;
 }
 
+
 .center-node text {
     font-size: 14px; /* Slightly larger text for center */
 }
+
 
 .relation-line {
     stroke: #ccc;
@@ -163,4 +169,6 @@ svg text {
     font-size: 1.2em;
     color: #333;
     z-index: 10; /* Above SVG */
+    /* Allow clicks to pass through to SVG nodes below - this is now less needed as D3 handles click on nodes */
+    /* pointer-events: none; */
 }
