@@ -414,8 +414,8 @@ function pan(dx, dy) {
         const currentTransform = d3.zoomTransform(svg.node());
         // Apply translation
         const newTransform = currentTransform.translate(dx, dy);
-        // Apply the new transform to the SVG
-        svg.transition().duration(100).call(zoom.transform, newTransform);
+        // Apply the new transform to the SVG with a longer duration for smoother pan
+        svg.transition().duration(200).call(zoom.transform, newTransform); // Changed duration from 100 to 200
     }
 }
 
