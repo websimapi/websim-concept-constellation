@@ -73,20 +73,46 @@ function getNodeRadius(text) {
 
 // Define the tick function to update positions
 function ticked() {
-    if (!linkGroup || !nodeGroup) {
-        // This check should ideally not be needed if simulation is stopped correctly,
-        // but serves as a safeguard against the TypeError if tick runs unexpectedly.
-        console.error("Tick function called but linkGroup or nodeGroup is null. Simulation might not have been stopped.");
+    if (!linkGroup || !nodeGroup || !simulation) {
+        // Basic check to prevent errors if called before setup or after clear
+        // console.warn("Tick called but groups or simulation not initialized."); // Optional: log this case
         return;
     }
+
     linkGroup.selectAll("line")
-        .attr("x1", d => d.source.x)
-        .attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x)
-        .attr("y2", d => d.target.y);
+        .attr("x1", d => {
+            // Defensive check before accessing .x
+            if (!d.source) {
+                console.error("Link source is null/undefined in tick:", d);
+                return 0; // Return a default value or handle error
+            }
+            return d.source.x;
+        })
+        .attr("y1", d => {
+             if (!d.source) return 0;
+             return d.source.y;
+        })
+        .attr("x2", d => {
+             if (!d.target) {
+                 console.error("Link target is null/undefined in tick:", d);
+                 return 0; // Return a default value or handle error
+             }
+             return d.target.x;
+        })
+        .attr("y2", d => {
+             if (!d.target) return 0;
+             return d.target.y;
+        });
 
     nodeGroup.selectAll("g") // Select the group containing circle and text
-        .attr("transform", d => `translate(${d.x},${d.y})`);
+        .attr("transform", d => {
+             // Defensive check before accessing .x
+             if (!d || typeof d.x === 'undefined' || typeof d.y === 'undefined') {
+                  console.error("Node position is undefined in tick:", d);
+                  return "translate(0,0)";
+             }
+             return `translate(${d.x},${d.y})`;
+        });
 }
 
 // Drag functions
@@ -104,8 +130,8 @@ function dragged(event) {
 function dragended(event) {
   if (!event.active) simulation.alphaTarget(0);
   // Optional: uncomment to let forces take over after drag ends
-  event.subject.fx = null; // Release the node horizontally
-  event.subject.fy = null; // Release the node vertically
+  // event.subject.fx = null; // Release the node horizontally
+  // event.subject.fy = null; // Release the node vertically
 }
 
 
@@ -150,17 +176,27 @@ function renderGraph(container) {
     } else {
         // If SVG exists, update simulation data
         simulation.nodes(graphData.nodes);
+        // D3's forceLink.links() updates the internal link data
         simulation.force("link").links(graphData.links);
-        // The simulation will be restarted below if needed
+
+        // Re-heat simulation slightly to account for data changes
+        // simulation.alpha(simulation.alpha() + 0.1).restart(); // Removed, replaced by full restart below
     }
 
 
     // --- D3 Data Binding and Update ---
 
     // Update links using join
+    // Use a key function that works with string IDs as they are in graphData.links
     const links = linkGroup.selectAll("line")
-        // Use a robust key function that sorts source and target IDs
-        .data(graphData.links, d => [d.source.id, d.target.id].sort().join("-"));
+        // Key function ensures D3 tracks links based on their source/target IDs
+        // It needs to handle the state where source/target might be objects (after D3's resolution)
+        // or still strings (initially in graphData). Using IDs works for both.
+        .data(graphData.links, d => {
+            const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+            const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+            return [sourceId, targetId].sort().join("-"); // Use sorted IDs as key
+        });
 
     links.join(
         enter => enter.append("line")
@@ -213,13 +249,13 @@ function renderGraph(container) {
         exit => exit.remove() // Remove old nodes that are no longer in data
     );
 
-    // Restart simulation with updated data if it's not already running strongly
-    if (simulation.alpha() < 0.5) { // Check if simulation is close to settling (increased threshold slightly)
-         simulation.alpha(1).restart(); // Restart with full strength
-    } else {
-        // If already running strong, just re-heat it slightly
-        simulation.alpha(simulation.alpha() + 0.1).restart();
-    }
+    // Restart simulation with updated data
+    // Always restart fully to ensure all new nodes/links are processed by forces
+    simulation.alpha(1).restart();
+
+    // Manually run simulation tick once to place new elements immediately
+    // This helps position new nodes/links correctly before the animated ticks take over.
+    simulation.tick();
 }
 
 
@@ -308,10 +344,15 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
         // 2. Add a link between the source node (the one being explored, `lowerWord`) and the target node
         // Check if a link already exists between lowerWord and cleanConcept (in either direction)
-        const linkExists = graphData.links.some(link =>
-            // Use sorted IDs for robust comparison
-            [link.source.id, link.target.id].sort().join("-") === [lowerWord, cleanConcept].sort().join("-")
-        );
+        const linkExists = graphData.links.some(link => {
+             // Need to handle source/target being objects or strings here for the check
+             const linkSourceId = typeof link.source === 'object' ? link.source.id : link.source;
+             const linkTargetId = typeof link.target === 'object' ? link.target.id : link.target;
+             const ids1 = [linkSourceId, linkTargetId].sort().join("-");
+             const ids2 = [lowerWord, cleanConcept].sort().join("-");
+             return ids1 === ids2;
+        });
+
 
         if (!linkExists) {
              // If link doesn't exist, add it to the graph data
@@ -321,6 +362,9 @@ async function handleExplore(word, container, clickedNodeId = null) {
         }
         // Else: The link already exists, do nothing.
     });
+
+    //console.log("Nodes after update:", graphData.nodes.length, graphData.nodes);
+    //console.log("Links after update:", graphData.links.length, graphData.links);
 
 
     // Render the updated graph with the newly added nodes and links
