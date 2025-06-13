@@ -1,36 +1,48 @@
 body {
     font-family: sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
+    display: block;
     min-height: 100vh;
     margin: 0;
     background-color: #f0f0f0;
-    padding: 20px;
+    padding: 0;
+    overflow: hidden;
 }
 
 .container {
     background-color: #fff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
     text-align: center;
-    width: 90%;
-    max-width: 800px;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
 }
 
 h1 {
-    color: #333;
-    margin-bottom: 10px;
+    margin-bottom: 0;
+    margin-top: 0;
+    padding-top: 20px;
 }
 
 p {
-    color: #666;
-    margin-bottom: 20px;
+    margin-bottom: 0;
+    padding-bottom: 10px;
 }
 
 .input-area {
-    margin-bottom: 30px;
+    margin-bottom: 0;
+    padding: 10px;
+    background-color: #fff;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
 }
 
 #wordInput {
@@ -39,6 +51,8 @@ p {
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 1em;
+    flex-grow: 1;
+    max-width: 300px;
 }
 
 #exploreButton {
@@ -50,6 +64,7 @@ p {
     cursor: pointer;
     font-size: 1em;
     transition: background-color 0.3s ease;
+    flex-shrink: 0;
 }
 
 #exploreButton:hover {
@@ -58,21 +73,21 @@ p {
 
 .visualization-area {
     width: 100%;
-    height: 500px; /* Fixed height for the visualization */
-    border: 1px solid #eee;
-    border-radius: 4px;
+    height: auto;
+    flex-grow: 1;
+    border: none;
+    border-radius: 0;
     background-color: #fff;
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative; /* Needed for absolute positioning of SVG and loading overlay */
-    overflow: hidden; /* Hide nodes/lines that go outside the bounds */
+    position: relative;
+    overflow: hidden;
 }
 
 .visualization-area svg {
     width: 100%;
     height: 100%;
-    /* Important for D3 drag */
     pointer-events: all;
 }
 
@@ -82,7 +97,6 @@ p {
 }
 
 /* SVG Styles */
-/* Base style for all nodes */
 .node circle {
     stroke: #fff;
     stroke-width: 2px;
@@ -103,23 +117,21 @@ p {
     font-size: 12px;
     text-anchor: middle;
     dominant-baseline: central;
-    pointer-events: none; /* Make text not intercept mouse events */
-    user-select: none; /* Prevent text selection */
+    pointer-events: none;
+    user-select: none;
 }
 
 .center-node circle {
-     fill: #28a745; /* Different color for the center node */
+     fill: #28a745;
 }
 
 .center-node circle:hover {
      fill: #218838;
 }
 
-
 .center-node text {
-    font-size: 14px; /* Slightly larger text for center */
+    font-size: 14px;
 }
-
 
 .relation-line {
     stroke: #ccc;
@@ -134,9 +146,9 @@ svg text {
 /* The original info-section styles are now applied to the content inside the modal */
 .info-section {
     text-align: left;
-    margin-top: 0; /* No top margin needed in modal */
-    padding-top: 0; /* No top padding needed in modal */
-    border-top: none; /* No top border needed in modal */
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .info-section h2 {
@@ -163,25 +175,24 @@ svg text {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+    background-color: rgba(255, 255, 255, 0.8);
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 1.2em;
     color: #333;
-    z-index: 10; /* Above SVG */
-    pointer-events: none; /* Allow interaction with elements below */
+    z-index: 10;
+    pointer-events: none;
 }
-
 
 /* New styles for Help Button and Modal */
 .help-button {
-    position: fixed; /* Fixed position relative to viewport */
+    position: fixed;
     top: 20px;
     right: 20px;
     width: 40px;
     height: 40px;
-    border-radius: 50%; /* Make it round */
+    border-radius: 50%;
     background-color: #007bff;
     color: white;
     border: none;
@@ -191,7 +202,7 @@ svg text {
     justify-content: center;
     align-items: center;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 100; /* Ensure it's above other content */
+    z-index: 100;
     transition: background-color 0.3s ease;
 }
 
@@ -200,17 +211,16 @@ svg text {
 }
 
 .modal-overlay {
-    position: fixed; /* Cover the entire viewport */
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent overlay */
+    background-color: rgba(0, 0, 0, 0.6);
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 200; /* Above everything else */
-    /* Hide by default */
+    z-index: 200;
     visibility: hidden;
     opacity: 0;
     transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -221,18 +231,17 @@ svg text {
     opacity: 1;
 }
 
-
 .modal-content {
     background-color: #fff;
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    position: relative; /* For close button positioning */
-    max-width: 600px; /* Limit content width */
-    max-height: 80vh; /* Limit content height to avoid going off screen */
-    overflow-y: auto; /* Add scroll if content exceeds max height */
-    width: 90%; /* Responsive width */
-    text-align: left; /* Align content to the left */
+    position: relative;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    width: 90%;
+    text-align: left;
 }
 
 .close-button {

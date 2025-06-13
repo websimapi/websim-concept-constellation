@@ -11,10 +11,35 @@ let svg;
 let linkElements;
 let nodeElements;
 let simulation;
-const width = 800;
-const height = 500;
-const centerX = width / 2;
-const centerY = height / 2;
+// Use dynamic width and height based on the container
+let width = 0;
+let height = 0;
+let centerX = 0;
+let centerY = 0;
+
+// Function to update dimensions based on container size
+function updateDimensions(container) {
+    width = container.clientWidth;
+    height = container.clientHeight;
+    centerX = width / 2;
+    centerY = height / 2;
+
+    if (svg) {
+        svg.attr("viewBox", `0 0 ${width} ${height}`);
+    }
+     if (simulation) {
+        simulation.force("center", d3.forceCenter(centerX, centerY));
+        // Restart simulation with updated center force
+        simulation.alpha(0.3).restart();
+    }
+
+    // If center node exists, update its fixed position
+    const centerNode = graphData.nodes.find(n => n.isCenter);
+    if (centerNode) {
+        centerNode.fx = centerX;
+        centerNode.fy = centerY;
+    }
+}
 
 // Function to calculate node radius based on text length
 function calculateNodeRadius(d) {
@@ -77,17 +102,20 @@ function initializeGraph(container) {
      // Clear previous content (SVG and loading overlay)
     container.innerHTML = '';
 
+    // Update dimensions based on container size before creating SVG
+    updateDimensions(container);
+
     // Create SVG element only once
     svg = d3.select(container)
             .append("svg")
-            .attr("viewBox", `0 0 ${width} ${height}`);
+            .attr("viewBox", `0 0 ${width} ${height}`); // Use dynamic dimensions
 
     // Initialize force simulation
     simulation = d3.forceSimulation(graphData.nodes)
         // Increase distance for more spacing between linked nodes
         .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(150)) // Increased distance from 100 to 150
         .force("charge", d3.forceManyBody().strength(-300)) // Node repulsion
-        .force("center", d3.forceCenter(centerX, centerY)) // Center force
+        .force("center", d3.forceCenter(centerX, centerY)) // Center force (use dynamic center)
         // Add collision force to prevent node overlap
         .force("collide", d3.forceCollide().radius(calculateNodeRadius).iterations(2)); // Use dynamic radius function
 
@@ -135,14 +163,27 @@ function initializeGraph(container) {
 
     // Store drag function to apply to new nodes
     svg._dragBehavior = drag; // Attach to SVG for easy access
+
+     // Add window resize listener to update dimensions and restart simulation
+     window.addEventListener('resize', () => {
+         updateDimensions(container);
+         // Need to call updateGraph() or similar to ensure nodes and links are re-bound
+         // Or simply restart simulation, forces should handle re-centering
+          simulation.alpha(1).restart();
+     });
 }
 
 // Function to update D3 elements based on graphData changes
 function updateGraph() {
-    if (!svg) {
-        console.error("SVG not initialized before updating graph.");
+    const container = d3.select("#visualizationArea").node(); // Get container reference
+    if (!svg || !container) {
+        console.error("SVG or container not initialized before updating graph.");
         return;
     }
+
+    // Ensure dimensions are up-to-date before updating graph elements
+    updateDimensions(container);
+
 
     // Update links
     linkElements = linkElements
@@ -166,7 +207,7 @@ function updateGraph() {
                  const group = enter.append("g")
                      .attr("class", d => d.isCenter ? "center-node node" : "concept-node node")
                      // Initial position for animation (optional: could be parent position)
-                     // Force layout will position them afterwards
+                     // Force layout will position them afterwards. Use dynamic center for initial position.
                      .attr("transform", d => `translate(${d.x || centerX},${d.y || centerY})`)
                      .style("opacity", 0); // Start transparent for fade-in
 
@@ -185,7 +226,10 @@ function updateGraph() {
                      .style("user-select", "none");
 
                  // Apply drag behavior
-                 group.call(svg._dragBehavior);
+                 if (svg._dragBehavior) { // Check if drag behavior is defined
+                     group.call(svg._dragBehavior);
+                 }
+
 
                  // Add click listener using D3 events
                  group.on('click', (event, d) => {
@@ -231,7 +275,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
              graphData.links = [];
              if (svg) svg.remove(); // Remove SVG if exists
              svg = null; // Reset svg variable
-             container.innerHTML = '<p class="placeholder">Please enter a word.</p>';
+             container.innerHTML = '<p class="placeholder">Enter a word above and click \'Explore\' to see the concept constellation.</p>';
         }
         return;
     }
@@ -252,7 +296,8 @@ async function handleExplore(word, container, clickedNodeId = null) {
         graphData.nodes = [];
         graphData.links = [];
         // Add the initial node. D3 simulation will position it.
-        // Fix center node position
+        // Fix center node position based on current dimensions
+        updateDimensions(container); // Ensure dimensions are set before fixing center
         graphData.nodes.push({ id: word, text: word, isCenter: true, fx: centerX, fy: centerY });
          // Initialize SVG and simulation on the first explore
         initializeGraph(container);
@@ -337,6 +382,7 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
     exploreButton.addEventListener('click', () => {
         const word = wordInput.value;
         // If graph is empty, initialize it. Otherwise, handleExplore will update.
+        // Ensure dimensions are updated before initial graph creation
         if (graphData.nodes.length === 0 && word.trim() !== "") {
              initializeGraph(visualizationArea);
         }
@@ -353,4 +399,10 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
 
     // Initial state: display placeholder
     visualizationArea.innerHTML = '<p class="placeholder">Enter a word above and click \'Explore\' to see the concept constellation.</p>';
+
+    // Initial dimensions setup (needed if page loads and simulation isn't started immediately)
+    const container = d3.select("#visualizationArea").node();
+    if (container) {
+        updateDimensions(container);
+    }
 }
