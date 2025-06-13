@@ -32,7 +32,11 @@ function updateDimensions(container) {
      if (simulation) {
         simulation.force("center", d3.forceCenter(centerX, centerY));
         // Restart simulation with updated center force
-        simulation.alpha(0.3).restart();
+        // Simulation doesn't need to restart on every resize if alpha decay is low,
+        // but restarting ensures forces like center and collide re-evaluate.
+        // A low alpha target or alpha decay can allow smooth transitions.
+        // Let's keep alpha(0.3).restart() for now as it was there.
+         simulation.alpha(0.3).restart();
     }
 
     // If center node exists, update its fixed position
@@ -198,8 +202,9 @@ function updateGraph() {
     updateDimensions(container);
 
     // Select and join links directly under graphGroup
+    // Use a key function that handles both resolved objects (with .id) and string IDs
     linkElements = graphGroup.selectAll(".relation-line")
-        .data(graphData.links, d => d.source.id + "-" + d.target.id) // Data join with key
+        .data(graphData.links, d => (d.source.id !== undefined ? d.source.id : d.source) + "-" + (d.target.id !== undefined ? d.target.id : d.target)) // Robust Key Function
         .join(
             enter => enter.append("line")
                 .attr("class", "relation-line")
@@ -356,7 +361,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
         const cleanConcept = concept.trim();
         const lowerConcept = cleanConcept.toLowerCase(); // Use lowercase for canonical ID
 
-        if (!lowerConcept) return; // Skip empty lowercase concepts
+        if (!lowerConcept || lowerConcept === lowerWord) return; // Skip empty or self-referencing concepts
 
         // Add node if it doesn't exist (check using lowercase ID)
         const existingNode = graphData.nodes.find(n => n.id === lowerConcept);
@@ -375,19 +380,18 @@ async function handleExplore(word, container, clickedNodeId = null) {
             // For now, let's just keep the first case encountered.
         }
 
-        // Add link if it doesn't exist (check using lowercase IDs)
-        // Need to check using node objects once simulation resolves them, or just use IDs here
-        // D3's forceLink resolves source/target strings to objects if nodes have an 'id' property
-        const linkExists = graphData.links.some(link =>
-            (link.source.id === lowerWord && link.target.id === lowerConcept) ||
-            (link.source.id === lowerConcept && link.target.id === lowerWord) ||
-            // Also check if they are still string IDs before simulation resolves
-            (link.source === lowerWord && link.target === lowerConcept) ||
-            (link.source === lowerConcept && link.target === lowerWord)
-        );
+        // Add link if it doesn't exist (check using lowercase IDs for source and target)
+        // Check using the ID property if it exists (resolved object), otherwise use the string
+        const linkExists = graphData.links.some(link => {
+            const sourceId = link.source.id !== undefined ? link.source.id : link.source;
+            const targetId = link.target.id !== undefined ? link.target.id : link.target;
+            return (sourceId === lowerWord && targetId === lowerConcept) ||
+                   (sourceId === lowerConcept && targetId === lowerWord);
+        });
+
 
         if (!linkExists) {
-            // Add link using lowercase IDs (D3 force will resolve)
+            // Add link using lowercase IDs (D3 force will resolve later)
             graphData.links.push({ source: lowerWord, target: lowerConcept });
         }
     });
