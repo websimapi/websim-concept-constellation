@@ -43,6 +43,7 @@ p {
     justify-content: center;
     align-items: center;
     flex-shrink: 0;
+    z-index: 101; /* Ensure input area is above help button/modal */
 }
 
 #wordInput {
@@ -89,6 +90,7 @@ p {
     width: 100%;
     height: 100%;
     pointer-events: all;
+    display: block; /* Prevent extra space below SVG */
 }
 
 .placeholder {
@@ -98,35 +100,31 @@ p {
 
 /* SVG Styles */
 .node circle {
-    stroke: #fff;
+    /* Fill is handled by pattern now */
+    /* fill: #007bff; */
+    stroke: #fff; /* White stroke around the circle */
     stroke-width: 2px;
     cursor: pointer;
-    transition: fill 0.3s ease;
+    /* transition: fill 0.3s ease; *//* No fill transition needed for patterns */
 }
 
-.concept-node circle {
-    fill: #007bff;
-}
-
-.concept-node circle:hover {
-    fill: #0056b3;
+/* Specific node types might still have different stroke or effects */
+.center-node circle {
+     stroke: #28a745; /* Green stroke for center node */
+     stroke-width: 3px;
 }
 
 .node text {
-    fill: #fff;
+    fill: #fff; /* White text fill */
     font-size: 12px;
     text-anchor: middle;
     dominant-baseline: central;
     pointer-events: none;
     user-select: none;
-}
-
-.center-node circle {
-     fill: #28a745;
-}
-
-.center-node circle:hover {
-     fill: #218838;
+    /* Text stroke/paint order for readability over images */
+    stroke: #000; /* Black stroke */
+    stroke-width: 2px; /* Thicker stroke for contrast */
+    paint-order: stroke; /* Draw stroke first, then fill */
 }
 
 .center-node text {
@@ -182,7 +180,7 @@ svg text {
     font-size: 1.2em;
     color: #333;
     z-index: 10;
-    pointer-events: none;
+    pointer-events: none; /* Allow interaction with graph underneath */
 }
 
 /* Styles for Help Button and Modal */
@@ -202,7 +200,7 @@ svg text {
     justify-content: center;
     align-items: center;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 100;
+    z-index: 100; /* Below modal, above most content */
     transition: background-color 0.3s ease;
 }
 
@@ -220,7 +218,7 @@ svg text {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 200;
+    z-index: 200; /* Topmost layer */
     visibility: hidden;
     opacity: 0;
     transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -265,7 +263,7 @@ svg text {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    z-index: 100;
+    z-index: 100; /* Below modal, above graph */
     display: flex;
     flex-direction: column; /* Stack buttons vertically */
     gap: 10px; /* Space between buttons */
@@ -289,4 +287,19 @@ svg text {
 
 .zoom-button:hover {
     background-color: #0056b3;
+}
+
+/* Styles for pattern content (loading/error text) */
+/* These styles apply to text elements *inside* the SVG <pattern> */
+svg pattern text {
+    font-size: 10px; /* Ensure font size is small inside pattern */
+    text-anchor: middle;
+    dominant-baseline: central;
+    fill: #555; /* Darker grey text */
+    pointer-events: none;
+    user-select: none;
+}
+
+svg pattern rect {
+    /* Styles handled inline in JS for fill color */
 }
