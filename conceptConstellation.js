@@ -358,8 +358,8 @@ function updateGraph() {
                     .attr("width", 1)
                     .attr("height", 1)
                     .attr("href", d => d.imageUrl ? d.imageUrl : null) // Set or update image URL
-                    // Fade in image if loaded and not loading/errored
-                    .transition().duration(500)
+                    // Set opacity directly without transition - Previous attempts had issues with transitions
+                    // Setting opacity directly should ensure it's visible when imageUrl is present
                     .style("opacity", d => d.imageUrl && !d.imageLoading && !d.imageError ? 1 : 0);
 
                 // Update loading text position (should remain 0.5, 0.5) and content/visibility
