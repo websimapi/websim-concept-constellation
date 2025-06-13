@@ -72,6 +72,7 @@ p {
 .visualization-area svg {
     width: 100%;
     height: 100%;
+    display: block; /* Prevents extra space below SVG */
 }
 
 .placeholder {
@@ -80,11 +81,12 @@ p {
 }
 
 /* SVG Styles */
+/* Target the circle within the group */
 .concept-node circle {
     fill: #007bff;
     stroke: #fff;
     stroke-width: 2px;
-    cursor: pointer;
+    cursor: pointer; /* Indicate interactivity */
     transition: fill 0.3s ease;
 }
 
@@ -92,15 +94,15 @@ p {
     fill: #0056b3;
 }
 
+/* Target the text within the group */
 .concept-node text {
     fill: #fff;
     font-size: 12px;
-    text-anchor: middle;
-    dominant-baseline: central;
     pointer-events: none; /* Make text not intercept mouse events */
     user-select: none; /* Prevent text selection */
 }
 
+/* Target the group for the center node */
 .center-node circle {
      fill: #28a745; /* Different color for the center node */
 }
@@ -109,11 +111,9 @@ p {
      fill: #218838;
 }
 
-
 .center-node text {
     font-size: 14px; /* Slightly larger text for center */
 }
-
 
 .relation-line {
     stroke: #ccc;
@@ -163,5 +163,4 @@ svg text {
     font-size: 1.2em;
     color: #333;
     z-index: 10; /* Above SVG */
-    pointer-events: none; /* Allow clicks to pass through to SVG nodes below */
 }
