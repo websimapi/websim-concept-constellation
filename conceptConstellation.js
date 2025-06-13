@@ -9,8 +9,8 @@ let graphData = {
 // D3 variables
 let svg;
 let graphGroup; // Group to hold nodes and links, for zooming and panning
-let linkElements;
-let nodeElements;
+let linkElements; // Will now select links directly under graphGroup
+let nodeElements; // Will now select nodes directly under graphGroup
 let simulation;
 let zoom; // D3 zoom behavior
 // Use dynamic width and height based on the container
@@ -114,6 +114,7 @@ function initializeGraph(container) {
             .attr("viewBox", `0 0 ${width} ${height}`); // Use dynamic dimensions
 
     // Create a group for the graph elements (nodes and links) that will be zoomed/panned
+    // Links and nodes will be appended directly to this group later in updateGraph
     graphGroup = svg.append("g");
 
     // Initialize force simulation
@@ -124,10 +125,6 @@ function initializeGraph(container) {
         .force("center", d3.forceCenter(centerX, centerY)) // Center force (use dynamic center)
         // Add collision force to prevent node overlap
         .force("collide", d3.forceCollide().radius(calculateNodeRadius).iterations(2)); // Use dynamic radius function
-
-    // Create link and node elements (attached to graphGroup)
-    linkElements = graphGroup.append("g").selectAll(".relation-line");
-    nodeElements = graphGroup.append("g").selectAll(".node"); // Group for nodes (circle + text)
 
     // Define the tick function to update positions
     simulation.on("tick", () => {
@@ -200,21 +197,22 @@ function updateGraph() {
     // Ensure dimensions are up-to-date before updating graph elements
     updateDimensions(container);
 
-    // Select links within the graphGroup
+    // Select and join links directly under graphGroup
     linkElements = graphGroup.selectAll(".relation-line")
         .data(graphData.links, d => d.source.id + "-" + d.target.id) // Data join with key
         .join(
             enter => enter.append("line")
                 .attr("class", "relation-line")
                 .attr("stroke-opacity", 0) // Start transparent for fade-in
+                .lower() // Ensure lines are below nodes
                 .transition().duration(500)
                 .attr("stroke-opacity", 1), // Fade in
-            update => update, // No update needed for static lines
+            update => update.lower(), // Ensure updated lines stay below nodes
             exit => exit.transition().duration(500).attr("stroke-opacity", 0).remove() // Fade out and remove
         );
 
 
-    // Select nodes within the graphGroup
+    // Select and join nodes directly under graphGroup
     nodeElements = graphGroup.selectAll(".node")
         .data(graphData.nodes, d => d.id) // Data join with key (using lowercase ID)
         .join(
@@ -261,6 +259,8 @@ function updateGraph() {
                  // Animate fade-in
                  group.transition().duration(500).style("opacity", 1);
 
+                 group.raise(); // Ensure new nodes are on top
+
                  return group;
              },
             update => {
@@ -269,6 +269,7 @@ function updateGraph() {
                      .attr("r", calculateNodeRadius); // Re-calculate radius in case text changed (unlikely here with lowercase)
                  update.select("text").text(d => d.text); // Update text (unlikely here with lowercase)
                  // No need to re-apply drag or click listeners, they are attached to the group on enter
+                 update.raise(); // Ensure updated nodes stay on top
                  return update;
              },
             exit => exit.transition().duration(500).style("opacity", 0).remove() // Fade out and remove
@@ -363,25 +364,30 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
         if (!existingNode) {
             // Add new node. Use lowercase for id and text.
-             targetNode = { id: lowerConcept, text: lowerConcept, parentId: lowerWord }; // Keep parentId as lowercase
+             targetNode = { id: lowerConcept, text: cleanConcept, parentId: lowerWord }; // Keep parentId as lowercase, use cleanConcept for display text
              graphData.nodes.push(targetNode);
              newNodes.push(targetNode); // Keep track of newly added nodes
         } else {
             targetNode = existingNode;
+            // If node exists but text might be different case (e.g., 'apple' vs 'Apple'), update to current case?
+            // Or keep original case? Let's keep the case from the first time it was added for consistency,
+            // unless the new concept is the center node, then maybe update?
+            // For now, let's just keep the first case encountered.
         }
 
         // Add link if it doesn't exist (check using lowercase IDs)
+        // Need to check using node objects once simulation resolves them, or just use IDs here
+        // D3's forceLink resolves source/target strings to objects if nodes have an 'id' property
         const linkExists = graphData.links.some(link =>
-            // Ensure source and target are node objects from the simulation or node IDs
-            // D3-force handles resolving string IDs to objects if 'id' is specified for the link force
+            (link.source.id === lowerWord && link.target.id === lowerConcept) ||
+            (link.source.id === lowerConcept && link.target.id === lowerWord) ||
+            // Also check if they are still string IDs before simulation resolves
             (link.source === lowerWord && link.target === lowerConcept) ||
-            (link.source === lowerConcept && link.target === lowerWord) ||
-            (link.source.id === lowerWord && link.target.id === lowerConcept) || // Check if already objects
-            (link.source.id === lowerConcept && link.target.id === lowerWord)
+            (link.source === lowerConcept && link.target === lowerWord)
         );
 
         if (!linkExists) {
-            // Add link using lowercase IDs
+            // Add link using lowercase IDs (D3 force will resolve)
             graphData.links.push({ source: lowerWord, target: lowerConcept });
         }
     });
