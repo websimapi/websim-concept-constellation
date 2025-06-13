@@ -6,7 +6,7 @@ let graphData = {
     links: []
 };
 
-let svg; // Declare svg globally to access it in update function
+let svg; // Declare svg globally to access it
 let simulation; // Declare simulation globally
 let linkGroup; // Declare link group globally
 let nodeGroup; // Declare node group globally
@@ -71,17 +71,73 @@ function getNodeRadius(text) {
 }
 
 
+// Define the tick function to update positions
+function ticked() {
+    if (!linkGroup || !nodeGroup) {
+        // This check should ideally not be needed if simulation is stopped correctly,
+        // but serves as a safeguard against the TypeError if tick runs unexpectedly.
+        console.error("Tick function called but linkGroup or nodeGroup is null. Simulation might not have been stopped.");
+        return;
+    }
+    linkGroup.selectAll("line")
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+
+    nodeGroup.selectAll("g") // Select the group containing circle and text
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+}
+
+// Drag functions
+function dragstarted(event) {
+  if (!event.active) simulation.alphaTarget(0.3).restart();
+  event.subject.fx = event.subject.x;
+  event.subject.fy = event.subject.y;
+}
+
+function dragged(event) {
+  event.subject.fx = event.x;
+  event.subject.fy = event.y;
+}
+
+function dragended(event) {
+  if (!event.active) simulation.alphaTarget(0);
+  // Optional: uncomment to let forces take over after drag ends
+  // event.subject.fx = null;
+  // event.subject.fy = null;
+}
+
+
 // Function to initialize or update the visualization using D3
 function renderGraph(container) {
     currentContainer = container; // Store container reference
 
-    // If SVG doesn't exist, create it
+    // --- Handle Placeholder State ---
+    if (graphData.nodes.length === 0) {
+        // If simulation exists, stop it before removing elements
+        if (simulation) {
+            simulation.stop();
+        }
+        // Clear any existing SVG or content
+        container.innerHTML = '<p class="placeholder">Enter a word above and click \'Explore\' to see the concept constellation.</p>';
+        // Reset D3 selections and simulation reference to indicate no graph is rendered
+        svg = null;
+        simulation = null;
+        linkGroup = null;
+        nodeGroup = null;
+        return; // Stop execution here
+    }
+
+    // --- Create/Select SVG and Groups ---
+    // If SVG doesn't exist (because we just moved from placeholder state or initial load)
     if (!svg) {
-        container.innerHTML = ''; // Clear initial placeholder
+        container.innerHTML = ''; // Clear placeholder content
         svg = d3.select(container)
                 .append("svg")
                 .attr("viewBox", "0 0 800 500"); // Match container size
-                // Create groups for links and nodes to control drawing order
+
+        // Create groups for links and nodes
         linkGroup = svg.append("g").attr("class", "links");
         nodeGroup = svg.append("g").attr("class", "nodes");
 
@@ -89,203 +145,184 @@ function renderGraph(container) {
         simulation = d3.forceSimulation(graphData.nodes)
             .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100)) // Link force with specified distance
             .force("charge", d3.forceManyBody().strength(-300)) // Node repulsion force
-            .force("center", d3.forceCenter(400, 250)); // Center force
-
-        // Add drag behavior
-        const drag = d3.drag()
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended);
-
-        // Apply drag behavior later when nodes are created/updated
-
-        // Define the tick function to update positions
-        simulation.on("tick", () => {
-            linkGroup.selectAll("line")
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
-
-            nodeGroup.selectAll("g") // Select the group containing circle and text
-                .attr("transform", d => `translate(${d.x},${d.y})`);
-        });
-
-         // Initial state: display placeholder if no nodes
-         if (graphData.nodes.length === 0) {
-              container.innerHTML = '<p class="placeholder">Enter a word above and click \'Explore\' to see the concept constellation.</p>';
-              svg = null; // Reset svg so it's recreated next time
-              simulation = null; // Reset simulation
-              linkGroup = null;
-              nodeGroup = null;
-              currentContainer = null;
-              return;
-         }
-
+            .force("center", d3.forceCenter(400, 250)) // Center force (center of 800x500 viewbox)
+            .on("tick", ticked); // Attach tick handler
     } else {
-        // Update simulation with new data if SVG already exists
-         simulation.nodes(graphData.nodes);
-         simulation.force("link").links(graphData.links);
-         simulation.alpha(1).restart(); // Restart simulation
+        // If SVG exists, update simulation data
+        simulation.nodes(graphData.nodes);
+        simulation.force("link").links(graphData.links);
+        // The simulation will be restarted below if needed
     }
 
 
     // --- D3 Data Binding and Update ---
 
-    // Update links
+    // Update links using join
     const links = linkGroup.selectAll("line")
         .data(graphData.links, d => d.source.id + "-" + d.target.id); // Use a key function for efficient updates
 
-    // Exit old links
-    links.exit().remove();
+    links.join(
+        enter => enter.append("line")
+            .attr("class", "relation-line"), // Add class for styling
+        update => update, // No specific updates needed for existing lines currently
+        exit => exit.remove() // Remove old links that are no longer in data
+    );
 
-    // Enter new links
-    links.enter().append("line")
-        .attr("class", "relation-line"); // Add class for styling
 
-    // Update nodes (using groups for circle+text)
+    // Update nodes (using groups for circle+text) using join
     const nodes = nodeGroup.selectAll("g")
         .data(graphData.nodes, d => d.id); // Use node id as key
 
-    // Exit old nodes
-    nodes.exit().remove();
+    nodes.join(
+        enter => {
+            // Create new group for each entering node
+            const newNodeGroup = enter.append("g")
+                .attr("class", d => d.isCenter ? "center-node" : "concept-node")
+                .call(d3.drag() // Apply drag behavior to *all* entering nodes
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+                .on("click", (event, d) => { // Add click listener for exploration
+                     // Prevent immediate exploration if just finished dragging
+                     if (event.defaultPrevented) return;
+                     // Explore the clicked node's relations
+                     handleExplore(d.id, currentContainer, d.id);
+                });
 
-    // Enter new nodes (create the group, circle, and text)
-    const newNodeGroups = nodes.enter().append("g")
-        .attr("class", d => d.isCenter ? "center-node" : "concept-node")
-        .call(d3.drag() // Apply drag behavior
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended))
-        .on("click", (event, d) => { // Add click listener for exploration
-             // Prevent immediate exploration if just finished dragging
-             if (event.defaultPrevented) return;
-             handleExplore(d.id, currentContainer, d.id); // Explore the clicked node
-        });
+            // Append circle and text to the new group
+            newNodeGroup.append("circle")
+                 .attr("r", d => getNodeRadius(d.text)); // Set radius based on text
 
-    newNodeGroups.append("circle")
-         .attr("r", d => getNodeRadius(d.text)); // Set radius based on text
+            newNodeGroup.append("text")
+                 .attr("dy", "0.35em") // Vertical alignment
+                 .attr("text-anchor", "middle") // Horizontal alignment
+                 .style("pointer-events", "none") // Ensure text doesn't block clicks
+                 .style("user-select", "none") // Prevent text selection
+                 .text(d => d.text); // Set text content
 
-    newNodeGroups.append("text")
-         .attr("dy", "0.35em") // Vertical alignment
-         .attr("text-anchor", "middle") // Horizontal alignment
-         .style("pointer-events", "none") // Ensure text doesn't block clicks
-         .style("user-select", "none") // Prevent text selection
-         .text(d => d.text); // Set text content
+            return newNodeGroup; // Return the new group selection
+        },
+        update => {
+             // Update attributes for existing nodes if needed (e.g., radius, text)
+             // The drag and click listeners applied during enter persist.
+             update.select("circle").attr("r", d => getNodeRadius(d.text));
+             update.select("text").text(d => d.text); // Update text might be necessary if node data changed
+             return update; // Return the update selection
+        },
+        exit => exit.remove() // Remove old nodes that are no longer in data
+    );
 
-
-    // --- Drag functions ---
-    function dragstarted(event) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x;
-      event.subject.fy = event.subject.y;
+    // Restart simulation with updated data if it's not already running strongly
+    if (simulation.alpha() < 0.1) { // Check if simulation is close to settling
+         simulation.alpha(1).restart(); // Restart with full strength
     }
-
-    function dragged(event) {
-      event.subject.fx = event.x;
-      event.subject.fy = event.y;
-    }
-
-    function dragended(event) {
-      if (!event.active) simulation.alphaTarget(0);
-      // Optional: Fix the node in place after drag ends, or let the forces take over
-      // event.subject.fx = null;
-      // event.subject.fy = null;
-    }
-
 }
 
 
 // Main function to handle exploration or node click
 async function handleExplore(word, container, clickedNodeId = null) {
-    if (!word || word.trim() === "") {
-        if (!clickedNodeId) { // Only clear and show placeholder if not clicking on a node
+    const lowerWord = word.toLowerCase().trim();
+
+    if (!lowerWord) {
+        if (!clickedNodeId) { // Only clear and show placeholder if initiating from an empty input
              graphData.nodes = [];
              graphData.links = [];
-             // Re-render to clear the SVG and show placeholder
-             renderGraph(container);
+             renderGraph(container); // Re-render to clear the SVG and show placeholder
         }
         return;
     }
 
-    // Check if this word is already the center node
-    const isInitialCenter = graphData.nodes.length > 0 && graphData.nodes[0].id === word && graphData.nodes[0].isCenter;
+    // Determine if this is a completely new exploration from the input box
+    const isInitialInputExplore = !clickedNodeId;
 
-    // If it's a new initial exploration from the input box, or clicking on a non-center node
-    // We need to add the main node if it's not already in the graph, or if we are clearing/restarting
-    if (!clickedNodeId || !graphData.nodes.some(n => n.id === word)) {
-         // If starting fresh from input, clear previous data
-         if (!clickedNodeId) {
-              graphData.nodes = [];
-              graphData.links = [];
-              // Add the initial node.
-              graphData.nodes.push({ id: word, text: word, isCenter: true });
-         } else {
-             // If clicking an existing node that somehow wasn't added correctly initially, add it now.
-             // This case should ideally not happen with the current logic, but as a safeguard.
-             if (!graphData.nodes.find(n => n.id === word)) {
-                 graphData.nodes.push({ id: word, text: word, isCenter: clickedNodeId === word && graphData.nodes.length === 0 });
-             }
+    if (isInitialInputExplore) {
+        // If starting fresh from input, clear previous graph data completely
+        graphData.nodes = [];
+        graphData.links = [];
+        // Add the new central node. This is the *only* node marked as the initial center.
+        graphData.nodes.push({ id: lowerWord, text: lowerWord, isCenter: true });
+    } else {
+         // If clicking an existing node, check if it exists. Add if somehow missing (shouldn't happen).
+         const targetNodeExists = graphData.nodes.some(n => n.id === lowerWord);
+         if (!targetNodeExists) {
+             console.warn(`Clicked node "${lowerWord}" not found in graphData, adding it.`);
+             // Add the clicked node - it's not the initial center
+             graphData.nodes.push({ id: lowerWord, text: lowerWord, isCenter: false });
          }
+         // Note: When clicking a node, we add its related concepts and links to the existing graph.
+         // The 'isCenter' property of the clicked node itself is not changed here.
     }
 
 
     // Add loading indicator
-    // Remove any existing loading indicator first
-    const existingLoading = container.querySelector('.loading-overlay');
-    if(existingLoading) existingLoading.remove();
-
     const loadingOverlay = document.createElement('div');
     loadingOverlay.classList.add('loading-overlay');
-    loadingOverlay.textContent = `Exploring "${word}"...`;
-    container.appendChild(loadingOverlay);
+    loadingOverlay.textContent = `Exploring "${lowerWord}"...`;
+    // Assume visualizationArea is the container for the overlay
+    const overlayContainer = container;
+    // Ensure position is relative for absolute overlay positioning
+    overlayContainer.style.position = 'relative';
+
+    // Check if a loading overlay already exists and update its text, or append a new one
+     const existingLoadingOverlay = overlayContainer.querySelector('.loading-overlay');
+     if (!existingLoadingOverlay) {
+        overlayContainer.appendChild(loadingOverlay);
+     } else {
+        existingLoadingOverlay.textContent = loadingOverlay.textContent; // Update text if exists
+     }
 
 
     // Call AI to get related concepts
-    const relatedConcepts = await generateRelatedConcepts(word);
+    const relatedConcepts = await generateRelatedConcepts(lowerWord);
 
     // Remove loading indicator after AI call
-    loadingOverlay.remove();
+    const currentLoadingOverlay = overlayContainer.querySelector('.loading-overlay');
+    if (currentLoadingOverlay) {
+         currentLoadingOverlay.remove();
+    }
 
 
     // Add new nodes and links to graphData
     relatedConcepts.forEach(concept => {
         const cleanConcept = concept.trim();
 
-        if (!cleanConcept) return;
+        if (!cleanConcept || cleanConcept.toLowerCase() === lowerWord) {
+             // Skip empty strings or the original word itself (already filtered in generateRelatedConcepts, but double-check)
+            return;
+        }
 
         // Add node if it doesn't exist
         const existingNode = graphData.nodes.find(n => n.id === cleanConcept);
         if (!existingNode) {
-            // Add new node. D3 simulation will position it.
-             graphData.nodes.push({ id: cleanConcept, text: cleanConcept, isCenter: false }); // New nodes are not centers
+            // Add new node. D3 simulation will position it. Not the initial center.
+             graphData.nodes.push({ id: cleanConcept, text: cleanConcept, isCenter: false });
         }
 
         // Add link if it doesn't exist (check both directions)
         const linkExists = graphData.links.some(link =>
-            (link.source.id === word && link.target.id === cleanConcept) ||
-            (link.source.id === cleanConcept && link.target.id === word)
+            // Check using node IDs (source and target properties can be IDs or objects)
+            (link.source.id === lowerWord && link.target.id === cleanConcept) ||
+            (link.source.id === cleanConcept && link.target.id === lowerWord)
         );
 
         if (!linkExists) {
-             // D3 link force requires source/target to be node objects or their IDs.
-             // We add them as objects here, but D3 forceLink can resolve IDs too if .id() is set.
-             // Adding as IDs initially and let D3 resolve them via forceLink.id()
-            graphData.links.push({ source: word, target: cleanConcept });
+             // Add link using node IDs; D3's forceLink.id() will resolve them to node objects
+            graphData.links.push({ source: lowerWord, target: cleanConcept });
         }
     });
 
-    // Render the updated graph
+    // Render the updated graph with the newly added nodes and links
     renderGraph(container);
 }
 
 
-// Setup function called from index.js
+// Setup function called from script.js
 export function setupConceptConstellation(wordInput, exploreButton, visualizationArea) {
     // Add event listener to the button
     exploreButton.addEventListener('click', () => {
         const word = wordInput.value;
-        handleExplore(word, visualizationArea); // Initial explore, no clickedNodeId
+        // Initial exploration from input box, clickedNodeId is null
+        handleExplore(word, visualizationArea);
     });
 
     // Optional: Allow pressing Enter in the input field
@@ -296,6 +333,6 @@ export function setupConceptConstellation(wordInput, exploreButton, visualizatio
         }
     });
 
-    // Initial state: render the placeholder
+    // Initial state: render the placeholder graphic
     renderGraph(visualizationArea);
 }
