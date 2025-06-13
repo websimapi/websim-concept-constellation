@@ -23,7 +23,7 @@
         </div>
         <div id="visualizationArea" class="visualization-area">
             <!-- SVG visualization will be rendered here by script.js -->
-            <p class="placeholder">Enter a word above and click 'Explore' to see the concept constellation.</p>
+            <!-- Placeholder is now added/managed by script.js -->
         </div>
 
         <div class="info-section">
@@ -33,21 +33,19 @@
                 The visualization area will display a graph:
             </p>
             <ul>
-                <li>The large green circle in the center is the word you entered.</li>
-                <li>The smaller blue circles around it represent concepts related to the center word.</li>
-                <li>Lines connect the center word to its related concepts.</li>
-                <li>Click on any of the smaller blue circles (related concepts) to make that word the new center and explore *its* related concepts!</li>
+                <li>The large green circle in the center is the word you entered initially.</li>
+                <li>Click on any of the smaller blue circles (related concepts) to explore *its* related concepts. These will be added to the existing graph, allowing multi-layer exploration.</li>
+                <li>Lines connect related concepts.</li>
             </ul>
 
             <h2>What's Next? (Ideas for Future Development)</h2>
             <p>This is a basic demonstration, but here are some ideas for expanding the Concept Constellation:</p>
             <ul>
-                <li>**Richer Data:** Using a larger, more sophisticated knowledge base or AI model to find more accurate and diverse relationships between words.</li>
-                <li>**Multi-Layer Exploration:** Allowing users to see concepts related to the related concepts, creating a deeper, multi-layered graph.</li>
-                <li>**Interactive Visualization:** Adding animations for smoother transitions between graphs, enabling dragging of nodes, and potentially different layout options (like force-directed graphs).</li>
+                <li>**Improved Visualization:** Adding animations for smoother transitions, improving node positioning to reduce overlap, enabling dragging of nodes, and potentially different layout options (like force-directed graphs) for better clarity as the graph grows.</li>
                 <li>**Concept Information:** Displaying definitions or brief descriptions when hovering over or clicking a concept node.</li>
                 <li>**Search & Filter:** Allowing users to search for specific concepts within a displayed constellation.</li>
                 <li>**Saving & Sharing:** Features to save interesting constellations or share them with others.</li>
+                <li>**Node Styling:** Different colors or styles for nodes based on their "level" from the original center or their type.</li>
             </ul>
             <p>Feel free to suggest other ideas!</p>
         </div>
@@ -57,4 +55,3 @@
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
-

@@ -65,7 +65,8 @@ p {
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative; /* Needed for absolute positioning of SVG */
+    position: relative; /* Needed for absolute positioning of SVG and loading overlay */
+    overflow: hidden; /* Hide nodes/lines that go outside the bounds */
 }
 
 .visualization-area svg {
@@ -146,4 +147,21 @@ svg text {
 .info-section li {
     margin-bottom: 8px;
     color: #666;
+}
+
+/* Loading Overlay Style */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2em;
+    color: #333;
+    z-index: 10; /* Above SVG */
+    pointer-events: none; /* Allow clicks to pass through to SVG nodes below */
 }
