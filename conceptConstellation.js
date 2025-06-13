@@ -75,32 +75,31 @@ function getNodeRadius(text) {
 function ticked() {
     if (!linkGroup || !nodeGroup || !simulation) {
         // Basic check to prevent errors if called before setup or after clear
-        // console.warn("Tick called but groups or simulation not initialized."); // Optional: log this case
         return;
     }
 
     linkGroup.selectAll("line")
         .attr("x1", d => {
             // Defensive check before accessing .x
-            if (!d.source) {
-                console.error("Link source is null/undefined in tick:", d);
+            if (!d.source || typeof d.source.x === 'undefined') {
+                 //console.error("Link source.x is undefined in tick:", d);
                 return 0; // Return a default value or handle error
             }
             return d.source.x;
         })
         .attr("y1", d => {
-             if (!d.source) return 0;
+             if (!d.source || typeof d.source.y === 'undefined') return 0;
              return d.source.y;
         })
         .attr("x2", d => {
-             if (!d.target) {
-                 console.error("Link target is null/undefined in tick:", d);
+             if (!d.target || typeof d.target.x === 'undefined') {
+                 //console.error("Link target.x is undefined in tick:", d);
                  return 0; // Return a default value or handle error
              }
              return d.target.x;
         })
         .attr("y2", d => {
-             if (!d.target) return 0;
+             if (!d.target || typeof d.target.y === 'undefined') return 0;
              return d.target.y;
         });
 
@@ -108,7 +107,7 @@ function ticked() {
         .attr("transform", d => {
              // Defensive check before accessing .x
              if (!d || typeof d.x === 'undefined' || typeof d.y === 'undefined') {
-                  console.error("Node position is undefined in tick:", d);
+                  //console.error("Node position is undefined in tick:", d);
                   return "translate(0,0)";
              }
              return `translate(${d.x},${d.y})`;
@@ -166,32 +165,35 @@ function renderGraph(container) {
         // Create groups for links and nodes
         linkGroup = svg.append("g").attr("class", "links");
         nodeGroup = svg.append("g").attr("class", "nodes");
-
-        // Initialize the force simulation
-        simulation = d3.forceSimulation(graphData.nodes)
-            .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100)) // Link force with specified distance
-            .force("charge", d3.forceManyBody().strength(-400)) // Node repulsion force (slightly increased)
-            .force("center", d3.forceCenter(400, 250)) // Center force (center of 800x500 viewbox)
-            .on("tick", ticked); // Attach tick handler
-    } else {
-        // If SVG exists, update simulation data
-        simulation.nodes(graphData.nodes);
-        // D3's forceLink.links() updates the internal link data
-        simulation.force("link").links(graphData.links);
-
-        // Re-heat simulation slightly to account for data changes
-        // simulation.alpha(simulation.alpha() + 0.1).restart(); // Removed, replaced by full restart below
     }
 
 
+    // --- Initialize or RE-INITIALIZE the force simulation ---
+    // Stop any existing simulation first
+    if (simulation) {
+        simulation.stop();
+    }
+
+    // Re-initialize the force simulation with the CURRENT graphData
+    // D3 forces modify node/link objects *in place* in the arrays provided to simulation.nodes() and force.links()
+    simulation = d3.forceSimulation(graphData.nodes)
+        // Link force with reduced distance
+        .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(80))
+        // Node repulsion force (slightly increased)
+        .force("charge", d3.forceManyBody().strength(-500))
+        // Center force (center of 800x500 viewbox)
+        .force("center", d3.forceCenter(400, 250))
+        // Add collision force to prevent overlaps based on node radius + padding
+        .force("collide", d3.forceCollide().radius(d => getNodeRadius(d.text) + 5))
+        // Attach tick handler
+        .on("tick", ticked);
+
     // --- D3 Data Binding and Update ---
+    // Use the existing linkGroup and nodeGroup selections
 
     // Update links using join
-    // Use a key function that works with string IDs as they are in graphData.links
+    // Key function needs to handle source/target being objects (after D3's resolution) or strings (initially)
     const links = linkGroup.selectAll("line")
-        // Key function ensures D3 tracks links based on their source/target IDs
-        // It needs to handle the state where source/target might be objects (after D3's resolution)
-        // or still strings (initially in graphData). Using IDs works for both.
         .data(graphData.links, d => {
             const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
             const targetId = typeof d.target === 'object' ? d.target.id : d.target;
@@ -207,7 +209,7 @@ function renderGraph(container) {
 
 
     // Update nodes (using groups for circle+text) using join
-    const nodes = nodeGroup.selectAll("g")
+    const nodes = nodeGroup.selectAll("g") // Select the group containing circle and text
         .data(graphData.nodes, d => d.id); // Use node id as key
 
     nodes.join(
@@ -215,14 +217,17 @@ function renderGraph(container) {
             // Create new group for each entering node
             const newNodeGroup = enter.append("g")
                 .attr("class", d => d.isCenter ? "center-node" : "concept-node")
-                .call(d3.drag() // Apply drag behavior to *all* entering nodes
+                // Apply drag behavior to *all* entering nodes and update nodes
+                // D3's drag behavior is often applied on the 'update' selection + 'enter' selection or just 'nodes.call(drag)'
+                // Applying it only on 'enter' ensures it's attached only once per element
+                .call(d3.drag()
                     .on("start", dragstarted)
                     .on("drag", dragged)
                     .on("end", dragended))
                 .on("click", (event, d) => { // Add click listener for exploration
                      // Prevent immediate exploration if just finished dragging (D3 sets event.defaultPrevented)
                      if (event.defaultPrevented) return;
-                     // Explore the clicked node's relations
+                     // Explore the clicked node's relations using its ID
                      handleExplore(d.id, currentContainer, d.id);
                 });
 
@@ -233,7 +238,7 @@ function renderGraph(container) {
             newNodeGroup.append("text")
                  .attr("dy", "0.35em") // Vertical alignment
                  .attr("text-anchor", "middle") // Horizontal alignment
-                 .style("pointer-events", "none") // Ensure text doesn't block clicks
+                 .style("pointer-events", "none") // Ensure text doesn't block clicks on the circle
                  .style("user-select", "none") // Prevent text selection
                  .text(d => d.text); // Set text content
 
@@ -241,20 +246,18 @@ function renderGraph(container) {
         },
         update => {
              // Update attributes for existing nodes if needed (e.g., radius, text)
-             // The drag and click listeners applied during enter persist.
              update.select("circle").attr("r", d => getNodeRadius(d.text));
-             update.select("text").text(d => d.text); // Update text might be necessary if node data changed
+             update.select("text").text(d => d.text); // Update text if node data changed
+             // Drag behavior is persistent, doesn't need reapplying on 'update'
              return update; // Return the update selection
         },
         exit => exit.remove() // Remove old nodes that are no longer in data
     );
 
-    // Restart simulation with updated data
-    // Always restart fully to ensure all new nodes/links are processed by forces
-    simulation.alpha(1).restart();
+    // Restart the simulation
+    simulation.alpha(1).restart(); // Set high alpha for strong restart
 
-    // Manually run simulation tick once to place new elements immediately
-    // This helps position new nodes/links correctly before the animated ticks take over.
+    // Manually run simulation tick once to position new elements immediately
     simulation.tick();
 }
 
@@ -274,23 +277,24 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
     // Determine if this is a completely new exploration from the input box
     const isInitialInputExplore = !clickedNodeId;
+    const sourceNodeId = lowerWord; // The ID of the node being explored/clicked
 
     if (isInitialInputExplore) {
         // If starting fresh from input, clear previous graph data completely
         graphData.nodes = [];
         graphData.links = [];
         // Add the new central node. This is the *only* node marked as the initial center.
-        graphData.nodes.push({ id: lowerWord, text: lowerWord, isCenter: true });
+        graphData.nodes.push({ id: sourceNodeId, text: sourceNodeId, isCenter: true });
     } else {
-         // If clicking an existing node, ensure it exists (should always, but defensive check)
-         const targetNodeExists = graphData.nodes.some(n => n.id === lowerWord);
-         if (!targetNodeExists) {
-             console.warn(`Clicked node "${lowerWord}" not found in graphData, adding it.`);
-             // Add the clicked node - it's not the initial center
-             graphData.nodes.push({ id: lowerWord, text: lowerWord, isCenter: false });
+         // If clicking an existing node, ensure it exists in our data array
+         // This check is mostly defensive; the node must exist to be clicked.
+         const sourceNodeExists = graphData.nodes.some(n => n.id === sourceNodeId);
+         if (!sourceNodeExists) {
+             console.warn(`Clicked node "${sourceNodeId}" not found in graphData.nodes, attempting to add.`);
+             // Add the clicked node if somehow missing (shouldn't happen)
+             graphData.nodes.push({ id: sourceNodeId, text: sourceNodeId, isCenter: false });
          }
          // Note: When clicking a node, we add its related concepts and links to the existing graph.
-         // The 'isCenter' property of the clicked node itself is not changed here.
     }
 
 
@@ -300,8 +304,9 @@ async function handleExplore(word, container, clickedNodeId = null) {
     loadingOverlay.textContent = `Exploring "${lowerWord}"...`;
     // Assume visualizationArea is the container for the overlay
     const overlayContainer = container;
-    // Ensure position is relative for absolute overlay positioning
-    overlayContainer.style.position = 'relative';
+    // Ensure position is relative for absolute overlay positioning (already done in CSS, but defensive)
+     overlayContainer.style.position = 'relative';
+
 
     // Check if a loading overlay already exists and update its text, or append a new one
      const existingLoadingOverlay = overlayContainer.querySelector('.loading-overlay');
@@ -313,7 +318,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
 
 
     // Call AI to get related concepts
-    const relatedConcepts = await generateRelatedConcepts(lowerWord);
+    const relatedConcepts = await generateRelatedConcepts(sourceNodeId);
 
     // Remove loading indicator after AI call
     const currentLoadingOverlay = overlayContainer.querySelector('.loading-overlay');
@@ -325,7 +330,7 @@ async function handleExplore(word, container, clickedNodeId = null) {
     relatedConcepts.forEach(concept => {
         const cleanConcept = concept.trim();
 
-        if (!cleanConcept || cleanConcept.toLowerCase() === lowerWord) {
+        if (!cleanConcept || cleanConcept.toLowerCase() === sourceNodeId) {
              // Skip empty strings or the original word itself (already filtered in generateRelatedConcepts, but double-check)
             return;
         }
@@ -342,14 +347,14 @@ async function handleExplore(word, container, clickedNodeId = null) {
         }
         // Else: The node already exists, we will link to the existing node.
 
-        // 2. Add a link between the source node (the one being explored, `lowerWord`) and the target node
-        // Check if a link already exists between lowerWord and cleanConcept (in either direction)
+        // 2. Add a link between the source node (the one being explored, `sourceNodeId`) and the target node (`cleanConcept`)
+        // Check if a link already exists between sourceNodeId and cleanConcept (in either direction)
         const linkExists = graphData.links.some(link => {
              // Need to handle source/target being objects or strings here for the check
              const linkSourceId = typeof link.source === 'object' ? link.source.id : link.source;
              const linkTargetId = typeof link.target === 'object' ? link.target.id : link.target;
              const ids1 = [linkSourceId, linkTargetId].sort().join("-");
-             const ids2 = [lowerWord, cleanConcept].sort().join("-");
+             const ids2 = [sourceNodeId, cleanConcept].sort().join("-"); // Use sourceNodeId here
              return ids1 === ids2;
         });
 
@@ -357,14 +362,19 @@ async function handleExplore(word, container, clickedNodeId = null) {
         if (!linkExists) {
              // If link doesn't exist, add it to the graph data
              // Add link using node IDs; D3's forceLink.id() will resolve them to node objects
-            graphData.links.push({ source: lowerWord, target: cleanConcept });
+            graphData.links.push({ source: sourceNodeId, target: cleanConcept });
              // Note: The new link is added to the array, D3 will handle rendering it.
         }
         // Else: The link already exists, do nothing.
     });
 
-    //console.log("Nodes after update:", graphData.nodes.length, graphData.nodes);
-    //console.log("Links after update:", graphData.links.length, graphData.links);
+    // Log data before rendering to help debug if needed
+    // console.log("Graph Data Before Render:", {
+    //     nodesCount: graphData.nodes.length,
+    //     linksCount: graphData.links.length,
+    //     nodes: JSON.parse(JSON.stringify(graphData.nodes)), // Deep copy for logging state
+    //     links: JSON.parse(JSON.stringify(graphData.links))
+    // });
 
 
     // Render the updated graph with the newly added nodes and links
