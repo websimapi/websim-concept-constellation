@@ -119,20 +119,21 @@ async function generateAndAssignImage(node) {
             node.imageError = false; // Clear any previous error
 
             // Trigger a graph update to render the image for this node
-            updateGraph();
+            // Update only the specific node's pattern and circle fill
+            updateNodeImage(node.id);
 
         } else {
             console.warn(`Image generation failed for "${node.text}". No URL returned.`);
             node.imageLoading = false;
             node.imageError = true; // Mark as error
-            updateGraph(); // Update to show error state
+             updateNodeImage(node.id); // Update to show error state
         }
 
     } catch (error) {
         console.error(`Error generating image for "${node.text}":`, error);
         node.imageLoading = false;
         node.imageError = true; // Mark as error
-        updateGraph(); // Update to show error state
+        updateNodeImage(node.id); // Update to show error state
     }
 }
 
@@ -267,70 +268,75 @@ function updateGraph() {
         .data(graphData.nodes, d => d.id) // Pattern ID linked to node ID
         .join(
             enter => {
-                const pattern = enter.append("pattern")
-                    .attr("id", d => `pattern-${d.id}`)
-                    .attr("patternUnits", "userSpaceOnUse")
-                    // Set initial size based on current radius
-                    .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2);
+                 const pattern = enter.append("pattern")
+                     .attr("id", d => `pattern-${d.id}`)
+                     .attr("patternUnits", "userSpaceOnUse")
+                     // Use radius for pattern size (matches symptom, covers 1/4 if origin is center)
+                     .attr("width", d => calculateNodeRadius(d))
+                     .attr("height", d => calculateNodeRadius(d));
 
-                // Background rect for loading/error state (always present in pattern)
-                pattern.append("rect")
-                     .attr("x", d => -calculateNodeRadius(d))
-                     .attr("y", d => -calculateNodeRadius(d))
-                     .attr("width", d => calculateNodeRadius(d) * 2)
-                     .attr("height", d => calculateNodeRadius(d) * 2)
-                     .attr("fill", "#eee"); // Default gray background
-
-                // Image element (initially hidden)
-                pattern.append("image")
-                    .attr("x", d => -calculateNodeRadius(d))
-                    .attr("y", d => -calculateNodeRadius(d))
-                    .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2)
-                    .attr("preserveAspectRatio", "xMidYMid slice")
-                    .attr("href", null); // Start with no image URL
-
-                // Loading/Error text
-                 pattern.append("text")
+                 // Background rect for loading/error state
+                 pattern.append("rect")
+                      // Position at 0,0 within pattern area (covers 1/4 if pattern size is radius)
                      .attr("x", 0)
                      .attr("y", 0)
-                     .attr("dy", "0.35em")
-                     .attr("text-anchor", "middle")
-                     .attr("fill", "#555")
-                     .style("font-size", "10px") // Smaller font
-                     .style("pointer-events", "none")
-                     .style("user-select", "none")
-                     .text(d => d.imageLoading ? "Loading..." : (d.imageError ? "Error" : "")); // Set initial text
+                     // Size matches pattern size (radius x radius)
+                     .attr("width", d => calculateNodeRadius(d))
+                     .attr("height", d => calculateNodeRadius(d))
+                     .attr("fill", "#eee"); // Default gray background
+
+                 // Image element (initially hidden)
+                 pattern.append("image")
+                      // Position at 0,0 within pattern area (covers 1/4 if pattern size is radius)
+                     .attr("x", 0)
+                     .attr("y", 0)
+                     // Size matches pattern size (radius x radius)
+                     .attr("width", d => calculateNodeRadius(d))
+                     .attr("height", d => calculateNodeRadius(d))
+                     .attr("preserveAspectRatio", "xMidYMid slice")
+                     .attr("href", null); // Start with no image URL
+
+                 // Loading/Error text - Keep positioned at 0,0 (center of circle if pattern origin is circle center)
+                  pattern.append("text")
+                      .attr("x", 0)
+                      .attr("y", 0)
+                      .attr("dy", "0.35em")
+                      .attr("text-anchor", "middle")
+                      .attr("fill", "#555")
+                      .style("font-size", "10px") // Smaller font
+                      .style("pointer-events", "none")
+                      .style("user-select", "none")
+                      .text(d => d.imageLoading ? "Loading..." : (d.imageError ? "Error" : "")); // Set initial text
 
 
-                return pattern;
+                 return pattern;
             },
             update => {
-                // Update pattern dimensions (if radius changed)
-                update.attr("width", d => calculateNodeRadius(d) * 2)
-                      .attr("height", d => calculateNodeRadius(d) * 2);
+                const radius = calculateNodeRadius(d);
+                 // Update pattern dimensions (if radius changed) - using radius, matches symptom
+                update.attr("width", radius)
+                      .attr("height", radius);
 
-                // Update background rect size/position and color
+                // Update background rect size/position and color - using radius, matches symptom
                  update.select("rect")
-                     .attr("x", d => -calculateNodeRadius(d))
-                     .attr("y", d => -calculateNodeRadius(d))
-                     .attr("width", d => calculateNodeRadius(d) * 2)
-                     .attr("height", d => calculateNodeRadius(d) * 2)
+                     .attr("x", 0)
+                     .attr("y", 0)
+                     .attr("width", radius)
+                     .attr("height", radius)
                      .attr("fill", d => d.imageError ? "#fdd" : "#eee"); // Red background on error
 
-                // Update image href and opacity
+                // Update image href and opacity - using radius, matches symptom
                 update.select("image")
-                    .attr("x", d => -calculateNodeRadius(d))
-                    .attr("y", d => -calculateNodeRadius(d))
-                    .attr("width", d => calculateNodeRadius(d) * 2)
-                    .attr("height", d => calculateNodeRadius(d) * 2)
+                    .attr("x", 0)
+                    .attr("y", 0)
+                    .attr("width", radius)
+                    .attr("height", radius)
                     .attr("href", d => d.imageUrl ? d.imageUrl : null) // Set or update image URL
                     // Fade in image if loaded and not loading/errored
                     .transition().duration(500)
                     .style("opacity", d => d.imageUrl && !d.imageLoading && !d.imageError ? 1 : 0);
 
-                // Update loading text content and visibility
+                // Update loading text content and visibility - position is 0,0
                  update.select("text")
                      .text(d => d.imageLoading ? "Loading..." : (d.imageError ? "Error" : "")) // Update text content
                      .style("opacity", d => d.imageLoading || d.imageError ? 1 : 0); // Show if loading or error
@@ -355,6 +361,8 @@ function updateGraph() {
                  // Add circle, filled with the corresponding pattern
                  group.append("circle")
                      .attr("r", calculateNodeRadius) // Use the radius calculation function
+                     .attr("cx", 0) // Explicitly center the circle within the group
+                     .attr("cy", 0) // Explicitly center the circle within the group
                      .attr("fill", d => `url(#pattern-${d.id})`); // Reference the node's pattern
 
                  // Add text (overlayed on the image/pattern)
@@ -399,6 +407,8 @@ function updateGraph() {
                 // Update existing node groups
                  update.select("circle")
                      .attr("r", calculateNodeRadius) // Re-calculate radius if text changed (unlikely with lowercase)
+                      .attr("cx", 0) // Ensure explicit centering
+                      .attr("cy", 0) // Ensure explicit centering
                      .attr("fill", d => `url(#pattern-${d.id})`); // Ensure fill is correctly referencing the pattern
 
                  // Update text content (unlikely here with lowercase)
@@ -421,6 +431,57 @@ function updateGraph() {
     // Restart simulation
     simulation.alpha(1).restart(); // Set alpha to 1 to restart simulation with full energy
 }
+
+// Function to update just a single node's image/pattern state after image loads/errors
+function updateNodeImage(nodeId) {
+     const node = graphData.nodes.find(n => n.id === nodeId);
+     if (!node) return;
+
+     const pattern = svg.select("defs").select(`#pattern-${nodeId}`);
+     const nodeGroup = graphGroup.select(".nodes").select(`.node[data-id="${nodeId}"]`); // Assuming nodes have data-id
+
+      // Add a data-id attribute to the node group in the join 'enter' selection
+      // so we can select it reliably here.
+      // In updateGraph, inside join(enter => ...)
+      // group.attr("data-id", d => d.id);
+
+
+     if (!pattern.empty()) {
+         const radius = calculateNodeRadius(node);
+         // Update pattern elements based on the node's current state (imageUrl, imageLoading, imageError)
+         pattern.select("rect")
+             .attr("fill", node.imageError ? "#fdd" : "#eee");
+
+         pattern.select("image")
+             .attr("href", node.imageUrl ? node.imageUrl : null)
+             .transition().duration(500)
+             .style("opacity", node.imageUrl && !node.imageLoading && !node.imageError ? 1 : 0);
+
+         pattern.select("text")
+             .text(node.imageLoading ? "Loading..." : (node.imageError ? "Error" : ""))
+             .style("opacity", node.imageLoading || node.imageError ? 1 : 0);
+
+         // Although pattern size is based on radius, let's ensure it's updated just in case
+         pattern
+              .attr("width", radius)
+              .attr("height", radius);
+         pattern.select("rect")
+              .attr("width", radius)
+              .attr("height", radius);
+         pattern.select("image")
+              .attr("width", radius)
+              .attr("height", radius);
+     }
+      // Re-bind data to node groups if needed for attribute updates, although fill is on the circle inside
+     if (!nodeGroup.empty()) {
+          // No need to re-select circle inside, pattern update is enough for fill
+          // However, if radius changed significantly, need to update the circle's 'r'
+          // The updateGraph already handles this for all nodes.
+          // This specific function only updates the pattern content state.
+     }
+
+}
+
 
 // Main function to handle exploration or node click
 async function handleExplore(word, container, clickedNodeId = null) {
@@ -474,6 +535,10 @@ async function handleExplore(word, container, clickedNodeId = null) {
              // Use current position if available, otherwise center
             exploringNode.fx = exploringNode.x || centerX;
             exploringNode.fy = exploringNode.y || centerY;
+            // Add loading state to the clicked node's pattern/image
+             exploringNode.imageLoading = true;
+             exploringNode.imageError = false; // Clear previous error if any
+             updateNodeImage(exploringNode.id);
          }
     }
 
@@ -489,6 +554,9 @@ async function handleExplore(word, container, clickedNodeId = null) {
     if (exploringNode && !exploringNode.isCenter) {
         exploringNode.fx = null;
         exploringNode.fy = null;
+         // Remove loading state from the clicked node's pattern/image
+         exploringNode.imageLoading = false; // Assume success or error handled below
+         updateNodeImage(exploringNode.id);
     }
 
 
