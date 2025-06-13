@@ -16,6 +16,12 @@ const height = 500;
 const centerX = width / 2;
 const centerY = height / 2;
 
+// Function to calculate node radius based on text length
+function calculateNodeRadius(d) {
+     // Use the same logic as the circle radius, adding a small buffer for collision
+     return Math.max(25, 15 + (d.text ? d.text.length : 0) * 3) + 5; // Added 5px buffer
+}
+
 // Function to generate related concepts using the AI model
 async function generateRelatedConcepts(word) {
     const lowerWord = word.toLowerCase().trim();
@@ -82,6 +88,8 @@ function initializeGraph(container) {
         .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(150)) // Increased distance from 100 to 150
         .force("charge", d3.forceManyBody().strength(-300)) // Node repulsion
         .force("center", d3.forceCenter(centerX, centerY)); // Center force
+    // Add collision force to prevent node overlap
+    .force("collide", d3.forceCollide().radius(calculateNodeRadius).iterations(2)); // Use dynamic radius function
 
     // Create link and node elements
     linkElements = svg.append("g").selectAll(".relation-line");
@@ -164,7 +172,7 @@ function updateGraph() {
 
                  // Add circle
                  group.append("circle")
-                     .attr("r", d => Math.max(25, 15 + (d.text ? d.text.length : 0) * 3)); // Radius calculation
+                     .attr("r", calculateNodeRadius); // Use the radius calculation function
 
                  // Add text
                  group.append("text")
@@ -197,7 +205,7 @@ function updateGraph() {
             update => {
                 // Update existing node groups
                  update.select("circle")
-                     .attr("r", d => Math.max(25, 15 + (d.text ? d.text.length : 0) * 3)); // Re-calculate radius if text changed (unlikely here)
+                     .attr("r", calculateNodeRadius); // Re-calculate radius in case text changed (unlikely here)
                  update.select("text").text(d => d.text); // Update text (unlikely here)
                  return update;
              },
@@ -208,6 +216,8 @@ function updateGraph() {
     // Update simulation nodes and links
     simulation.nodes(graphData.nodes);
     simulation.force("link").links(graphData.links);
+    // Update collision force with potentially new nodes/radii
+    simulation.force("collide").radius(calculateNodeRadius);
 
     // Restart simulation
     simulation.alpha(1).restart(); // Set alpha to 1 to restart simulation with full energy
